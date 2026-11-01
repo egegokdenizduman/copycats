@@ -80,10 +80,23 @@ public class CopycatSlopeBlock extends CCWaterloggedCopycatBlock implements ISta
 
     @Override
     public Optional<Boolean> isCTBlocked(BlockAndTintGetter reader, BlockState state, BlockPos pos, BlockPos connectingPos, BlockPos blockingPos, Direction face) {
-        if (reader.getBlockState(blockingPos).is(this)) {
-            return Optional.of(false);
+        BlockState blocking = reader.getBlockState(blockingPos);
+        if (blocking.is(this)) {
+            // a slope over a side neighbour leaves the surface free, but one on the block behind the high edge covers it
+            return Optional.of(isBehindHighEdge(state, pos, connectingPos, face) && blocking.getValue(HALF) == state.getValue(HALF));
         }
         return Optional.empty();
+    }
+
+    private static boolean isBehindHighEdge(BlockState state, BlockPos pos, BlockPos connectingPos, Direction face) {
+        if (face != (state.getValue(HALF) == Half.TOP ? Direction.DOWN : Direction.UP)) return false;
+        Direction facing = state.getValue(FACING);
+        return switch (state.getValue(SHAPE)) {
+            case STRAIGHT -> connectingPos.equals(pos.relative(facing));
+            case INNER_LEFT -> connectingPos.equals(pos.relative(facing)) || connectingPos.equals(pos.relative(facing.getCounterClockWise()));
+            case INNER_RIGHT -> connectingPos.equals(pos.relative(facing)) || connectingPos.equals(pos.relative(facing.getClockWise()));
+            case OUTER_LEFT, OUTER_RIGHT -> false;
+        };
     }
 
     @SuppressWarnings("deprecation")
