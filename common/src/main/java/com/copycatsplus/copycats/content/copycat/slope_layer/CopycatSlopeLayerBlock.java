@@ -1,21 +1,29 @@
 package com.copycatsplus.copycats.content.copycat.slope_layer;
 
+import com.copycatsplus.copycats.CCBlocks;
 import com.copycatsplus.copycats.CCShapes;
 import com.copycatsplus.copycats.Copycats;
 import com.copycatsplus.copycats.foundation.copycat.CCWaterloggedCopycatBlock;
 import com.copycatsplus.copycats.foundation.copycat.ICopycatBlock;
 import com.copycatsplus.copycats.foundation.copycat.IStateType;
 import com.copycatsplus.copycats.utility.BlockUtils;
+import com.copycatsplus.copycats.utility.InteractionUtils;
 import com.simibubi.create.api.schematic.requirement.SpecialBlockItemRequirement;
 import com.simibubi.create.content.contraptions.StructureTransform;
 import com.simibubi.create.content.equipment.wrench.IWrenchable;
 import com.simibubi.create.content.schematics.requirement.ItemRequirement;
+import com.simibubi.create.foundation.placement.PoleHelper;
+import net.createmod.catnip.placement.PlacementHelpers;
+import net.createmod.catnip.placement.PlacementOffset;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.item.context.UseOnContext;
@@ -28,12 +36,14 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.*;
 import net.minecraft.world.level.pathfinder.PathComputationType;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.List;
+import java.util.function.Predicate;
 
 import static net.minecraft.core.Direction.UP;
 
@@ -46,6 +56,8 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
     public static final EnumProperty<Half> HALF = BlockStateProperties.HALF;
     public static final BooleanProperty IN_WALL = BlockStateProperties.IN_WALL;
     public static final IntegerProperty LAYERS = BlockStateProperties.LAYERS;
+
+    private static final int placementHelperId = PlacementHelpers.register(new PlacementHelper());
 
     public CopycatSlopeLayerBlock(Properties pProperties) {
         super(pProperties);
@@ -60,6 +72,17 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> pBuilder) {
         super.createBlockStateDefinition(pBuilder.add(FACING, HALF, IN_WALL, LAYERS));
+    }
+
+    @Override
+    public ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hitResult) {
+        return InteractionUtils.sequentialItem(
+                // the helper consumes every click, so stacking clicks must skip it
+                () -> canStack(state, hitResult.getDirection())
+                        ? ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION
+                        : InteractionUtils.usePlacementHelper(placementHelperId, stack, state, level, pos, player, hand, hitResult),
+                () -> super.useItemOn(stack, state, level, pos, player, hand, hitResult)
+        );
     }
 
     @Override
@@ -104,18 +127,22 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
     public boolean canBeReplaced(@NotNull BlockState pState, BlockPlaceContext pUseContext) {
         ItemStack itemstack = pUseContext.getItemInHand();
         if (!itemstack.is(this.asItem())) return false;
-        if (pState.getValue(LAYERS) == 8) return false;
-        Half half = pState.getValue(HALF);
-        boolean inWall = pState.getValue(IN_WALL);
-        Direction facing = pState.getValue(FACING);
+        return canStack(pState, pUseContext.getClickedFace());
+    }
+
+    private static boolean canStack(BlockState state, Direction clickedFace) {
+        if (state.getValue(LAYERS) == 8) return false;
+        Half half = state.getValue(HALF);
+        boolean inWall = state.getValue(IN_WALL);
+        Direction facing = state.getValue(FACING);
         if(!inWall) {
-            if (pUseContext.getClickedFace() == facing.getOpposite()) return true;
+            if (clickedFace == facing.getOpposite()) return true;
         }
         else {
-            if (pUseContext.getClickedFace() == facing) return true;
+            if (clickedFace == facing) return true;
         }
-        if (half == Half.TOP && pUseContext.getClickedFace() == Direction.DOWN) return true;
-        if (half == Half.BOTTOM && pUseContext.getClickedFace() == Direction.UP) return true;
+        if (half == Half.TOP && clickedFace == Direction.DOWN) return true;
+        if (half == Half.BOTTOM && clickedFace == Direction.UP) return true;
         return false;
     }
 
@@ -201,5 +228,32 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
     @Override
     public float getShadeBrightness(BlockState state, BlockGetter level, BlockPos pos) {
         return state.getValue(LAYERS) == 8 ? 0.2f : 1.0f;
+    }
+
+    @MethodsReturnNonnullByDefault
+    private static class PlacementHelper extends PoleHelper<Direction> {
+
+        private PlacementHelper() {
+            // floor and IN_WALL forms both run along the axis perpendicular to FACING
+            super(CCBlocks.COPYCAT_SLOPE_LAYER::has, state -> state.getValue(FACING).getClockWise().getAxis(), FACING);
+        }
+
+        @Override
+        public Predicate<ItemStack> getItemPredicate() {
+            return i -> i.getItem() instanceof BlockItem
+                    && (((BlockItem) i.getItem()).getBlock() instanceof CopycatSlopeLayerBlock);
+        }
+
+        @Override
+        public PlacementOffset getOffset(Player player, Level world, BlockState state, BlockPos pos, BlockHitResult ray) {
+            if (canStack(state, ray.getDirection()))
+                return PlacementOffset.fail();
+            // one item buys one layer, so LAYERS stays at its default
+            return super.getOffset(player, world, state, pos, ray)
+                    .withTransform(s -> s.setValue(FACING, state.getValue(FACING))
+                            .setValue(HALF, state.getValue(HALF))
+                            .setValue(IN_WALL, state.getValue(IN_WALL)));
+        }
+
     }
 }
