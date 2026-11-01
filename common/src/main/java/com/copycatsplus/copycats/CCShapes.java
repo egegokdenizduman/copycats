@@ -275,6 +275,34 @@ public class CCShapes {
                     layer -> SLOPE_LAYER.get(Direction.SOUTH).get(Half.BOTTOM).get(false).get(layer).copy()
                             .rotateZ(-90).flipX(half == Half.TOP)
             )));
+    // Entity.collide takes the lowest step that helps, so one tick crosses only one riser.
+    // Floor slopes walk on half block treads, wider than a sprint tick, like vanilla stairs.
+    public static final Map<Direction, Map<StairsShape, MutableShape>> SLOPE_COLLISION =
+            forHorizontalDirections(forAll(STAIRS_SHAPE,
+                    slopeShape -> switch (slopeShape) {
+                        case STRAIGHT -> slopeTreads(0, 16);
+                        case INNER_LEFT, INNER_RIGHT -> shape(
+                                aabb(16, 8, 16),
+                                aabb(16, 8, 8).move(0, 8, 8),
+                                aabb(8, 8, 8).move(8, 8, 0)
+                        ).flipX(slopeShape == StairsShape.INNER_RIGHT);
+                        case OUTER_LEFT, OUTER_RIGHT -> shape(
+                                aabb(16, 8, 16),
+                                aabb(8, 8, 8).move(8, 8, 8)
+                        ).flipX(slopeShape == StairsShape.OUTER_RIGHT);
+                    }
+            ));
+    public static final Map<Direction, Map<Integer, MutableShape>> SLOPE_LAYER_COLLISION =
+            forHorizontalDirections(forAll(CopycatSlopeLayerBlock.LAYERS,
+                    layer -> slopeTreads(4 * CopycatSlopeLayerBlock.getLowEdge(layer), 4 * CopycatSlopeLayerBlock.getHighEdge(layer))
+            ));
+
+    private static MutableShape slopeTreads(double low, double high) {
+        return shape(
+                aabb(16, (low + high) / 2, 8),
+                aabb(16, high, 8).move(0, 0, 8)
+        );
+    }
 
     public static AssemblyTransform halves(Half half) {
         return t -> t.flipY(half == Half.TOP);

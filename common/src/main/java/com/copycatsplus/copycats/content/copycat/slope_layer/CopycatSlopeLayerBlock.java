@@ -348,6 +348,14 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
         return CCShapes.SLOPE_LAYER.get(pState.getValue(FACING)).get(pState.getValue(HALF)).get(pState.getValue(IN_WALL)).get(pState.getValue(LAYERS)).toShape();
     }
 
+    @SuppressWarnings("deprecation")
+    @Override
+    public @NotNull VoxelShape getCollisionShape(BlockState pState, @NotNull BlockGetter pLevel, @NotNull BlockPos pPos, @NotNull CollisionContext pContext) {
+        if (pState.getValue(IN_WALL) || pState.getValue(HALF) == Half.TOP)
+            return getShape(pState, pLevel, pPos, pContext);
+        return CCShapes.SLOPE_LAYER_COLLISION.get(pState.getValue(FACING)).get(pState.getValue(LAYERS)).toShape();
+    }
+
 
     public boolean supportsExternalFaceHiding(BlockState state) {
         return true;
