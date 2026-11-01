@@ -25,7 +25,7 @@ dependencies {
     modCompileOnly("com.tterrag.registrate:Registrate:${registrate_neoforge_version}")
     modImplementation("dev.engine-room.flywheel:flywheel-neoforge-${minecraft_version}:${flywheel_neoforge_version}")
     compileOnly("dev.engine-room.flywheel:flywheel-neoforge-api-${minecraft_version}:${flywheel_neoforge_version}")
-    modImplementation("net.createmod.ponder:Ponder-NeoForge-${minecraft_version}:${ponder_version}")
+    modImplementation("net.createmod.ponder:ponder-neoforge:${ponder_version}") { transitive = false }
 
     // required for proper remapping and compiling
     modCompileOnly("net.fabricmc.fabric-api:fabric-api:${fabric_api_version}")

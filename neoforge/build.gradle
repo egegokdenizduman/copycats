@@ -15,6 +15,7 @@ loom {
     accessWidenerPath = common.loom.accessWidenerPath
     runs {
         client {
+            vmArg "-XX:+IgnoreUnrecognizedVMOptions"
             vmArg "-XX:+AllowEnhancedClassRedefinition"
             programArgs "--username=Dev"
             if (useRenderDoc) {
@@ -58,13 +59,13 @@ dependencies {
     modImplementation("com.tterrag.registrate:Registrate:${registrate_neoforge_version}")
     modImplementation("dev.engine-room.flywheel:flywheel-neoforge-${minecraft_version}:${flywheel_neoforge_version}")
     compileOnly("dev.engine-room.flywheel:flywheel-neoforge-api-${minecraft_version}:${flywheel_neoforge_version}")
-    modImplementation("net.createmod.ponder:Ponder-NeoForge-${minecraft_version}:${ponder_version}")
+    modImplementation("net.createmod.ponder:ponder-neoforge:${ponder_version}") { transitive = false }
 
-    modLocalRuntime("curse.maven:jade-324717:${jade_neoforge_curse_id}")
+    modLocalRuntime("maven.modrinth:jade:${jade_neoforge_modrinth_id}") { transitive = false }
     modLocalRuntime("mezz.jei:jei-${minecraft_version}-neoforge:${jei_neoforge_version}")
 
-/*    modLocalRuntime("curse.maven:sodium-394468:${sodium_neoforge_curse_id}")
-    modLocalRuntime("curse.maven:forgified-fabric-api-889079:6370322")// Needed for sodium*/
+    // Not remapped: Loom's remap strips jarjar metadata. Sodium 0.8 only loads from run/mods (its mod is a nested jar)
+    localRuntime("maven.modrinth:iris:${iris_neoforge_version}") { transitive = false }
     modImplementation("curse.maven:additional-placements-674852:${additionalplacements_neoforge_curse_id}")
     modImplementation("curse.maven:athena-841890:${athena_neoforge_curse_id}")
     // modLocalRuntime("curse.maven:create-industry-693815:${tfmg_forge_curse_id}")
@@ -72,7 +73,7 @@ dependencies {
 //    modLocalRuntime("curse.maven:create-extended-cogs-739973:${extended_cogwheels_forge_curse_id}")
 
     modCompileOnly("curse.maven:double-slabs-350179:${double_slabs_neoforge_curse_id}")
-    modLocalRuntime("curse.maven:spark-361579:${spark_neoforge_curse_id}")
+    modLocalRuntime("maven.modrinth:spark:${spark_neoforge_modrinth_id}") { transitive = false }
     modCompileOnly("curse.maven:selene-499980:${moonlight_curse_neoforge_id}")
     modCompileOnly("curse.maven:vertical-slabs-compat-724387:${vertical_slabs_curse_neoforge_id}")
 
