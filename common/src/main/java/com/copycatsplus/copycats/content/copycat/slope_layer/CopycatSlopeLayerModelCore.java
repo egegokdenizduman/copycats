@@ -35,9 +35,6 @@ public class CopycatSlopeLayerModelCore extends CopycatModelCore {
             }
         };
 
-        if (layer <= 4)
-            CopycatSlopeModelCore.assembleSlope(context, transform, 0, layer * 4, enhanced);
-        else
-            CopycatSlopeModelCore.assembleSlope(context, transform, (layer - 4) * 4, 16, enhanced);
+        CopycatSlopeModelCore.assembleSlope(context, transform, CopycatSlopeLayerBlock.getLowEdge(layer) * 4, CopycatSlopeLayerBlock.getHighEdge(layer) * 4, enhanced);
     }
 }

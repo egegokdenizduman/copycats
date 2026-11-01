@@ -67,6 +67,7 @@ import com.copycatsplus.copycats.content.copycat.slice.CopycatSliceModelCore;
 import com.copycatsplus.copycats.content.copycat.slope.CopycatSlopeBlock;
 import com.copycatsplus.copycats.content.copycat.slope.CopycatSlopeModelCore;
 import com.copycatsplus.copycats.content.copycat.slope_layer.CopycatSlopeLayerBlock;
+import com.copycatsplus.copycats.content.copycat.slope_layer.CopycatSlopeLayerItem;
 import com.copycatsplus.copycats.content.copycat.slope_layer.CopycatSlopeLayerModelCore;
 import com.copycatsplus.copycats.content.copycat.stairs.CopycatStairsBlock;
 import com.copycatsplus.copycats.content.copycat.stairs.CopycatStairsModelCore;
@@ -652,8 +653,8 @@ public class CCBlocks {
                     .transform(CCBuilderTransformers.copycat())
                     .transform(FeatureToggle.register(FeatureCategory.SLOPES, FeatureCategory.STACKABLES))
                     .onRegister(onClient(() -> createBlockModel(CopycatSlopeLayerModelCore::new)))
-                    .loot(CCLootGen.build(CCLootGen.lootForLayers()))
-                    .item()
+                    .loot(CCLootGen.build(CCLootGen.lootForSlopeLayers()))
+                    .item(CopycatSlopeLayerItem::new)
                     .onRegister(CopycatDescription.register(
                             CopycatCharacteristics.COPYCAT,
                             CopycatCharacteristics.CT_TOGGLE,

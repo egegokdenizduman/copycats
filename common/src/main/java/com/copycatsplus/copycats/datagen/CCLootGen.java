@@ -3,6 +3,7 @@ package com.copycatsplus.copycats.datagen;
 import com.copycatsplus.copycats.content.copycat.board.CopycatBoardBlock;
 import com.copycatsplus.copycats.content.copycat.byte_panel.CopycatBytePanelBlock;
 import com.copycatsplus.copycats.content.copycat.bytes.CopycatByteBlock;
+import com.copycatsplus.copycats.content.copycat.slope_layer.CopycatSlopeLayerBlock;
 import com.tterrag.registrate.providers.loot.RegistrateBlockLootTables;
 import com.tterrag.registrate.util.nullness.NonNullBiConsumer;
 import net.createmod.catnip.data.Iterate;
@@ -30,17 +31,29 @@ public class CCLootGen {
     public static <B extends Block> BiConsumer<LootTable.Builder, B> lootForLayers(IntegerProperty property) {
         return (builder, block) -> {
             for (int i = 1; i <= 8; i++) {
-                builder.withPool(
-                        LootPool.lootPool()
-                                .setRolls(ConstantValue.exactly(1.0F))
-                                .when(ExplosionCondition.survivesExplosion())
-                                .when(LootItemBlockStatePropertyCondition
-                                        .hasBlockStateProperties(block)
-                                        .setProperties(StatePropertiesPredicate.Builder.properties().hasProperty(property, i)))
-                                .add(LootItem.lootTableItem(block).apply(SetItemCountFunction.setCount(ConstantValue.exactly(i))))
-                );
+                addLayerPool(builder, block, property, i, i);
             }
         };
+    }
+
+    public static <B extends Block> BiConsumer<LootTable.Builder, B> lootForSlopeLayers() {
+        return (builder, block) -> {
+            CCLootGen.<B>lootForLayers(CopycatSlopeLayerBlock.LAYERS).accept(builder, block);
+            addLayerPool(builder, block, CopycatSlopeLayerBlock.LAYERS, 9, CopycatSlopeLayerBlock.getItemCost(9));
+            addLayerPool(builder, block, CopycatSlopeLayerBlock.LAYERS, 10, CopycatSlopeLayerBlock.getItemCost(10));
+        };
+    }
+
+    private static void addLayerPool(LootTable.Builder builder, Block block, IntegerProperty property, int layers, int count) {
+        builder.withPool(
+                LootPool.lootPool()
+                        .setRolls(ConstantValue.exactly(1.0F))
+                        .when(ExplosionCondition.survivesExplosion())
+                        .when(LootItemBlockStatePropertyCondition
+                                .hasBlockStateProperties(block)
+                                .setProperties(StatePropertiesPredicate.Builder.properties().hasProperty(property, layers)))
+                        .add(LootItem.lootTableItem(block).apply(SetItemCountFunction.setCount(ConstantValue.exactly(count))))
+        );
     }
 
     public static <B extends Block> BiConsumer<LootTable.Builder, B> lootForBytes() {

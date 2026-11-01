@@ -4,6 +4,7 @@ import com.copycatsplus.copycats.CCBlockStateProperties.Side;
 import com.copycatsplus.copycats.CCBlockStateProperties.VerticalStairShape;
 import com.copycatsplus.copycats.content.copycat.half_layer.CopycatHalfLayerBlock;
 import com.copycatsplus.copycats.content.copycat.half_panel.CopycatHalfPanelBlock;
+import com.copycatsplus.copycats.content.copycat.slope_layer.CopycatSlopeLayerBlock;
 import com.copycatsplus.copycats.content.copycat.vertical_stairs.CopycatVerticalStairBlock;
 import com.copycatsplus.copycats.foundation.copycat.model.assembly.AssemblyTransform;
 import com.copycatsplus.copycats.foundation.copycat.model.assembly.MutableAABB;
@@ -178,8 +179,10 @@ public class CCShapes {
             ));
     public static final Map<Direction, Map<Half, Map<Boolean, Map<Integer, MutableShape>>>> SLOPE_LAYER =
             forHorizontalDirections(forHalves(forAll(IN_WALL,
-                    in_wall -> forAll(LAYERS,
+                    in_wall -> forAll(CopycatSlopeLayerBlock.LAYERS,
                             layer -> {
+                                int low = CopycatSlopeLayerBlock.getLowEdge(layer);
+                                int high = CopycatSlopeLayerBlock.getHighEdge(layer);
                                 MutableShape baseShape = layer <= 4 ?
                                         shape(
                                                 IntStream.range(0, SLOPE_SUBDIVISIONS)
@@ -198,21 +201,21 @@ public class CCShapes {
                                         ) :
                                         shape(
                                                 IntStream.range(0, SLOPE_SUBDIVISIONS)
-                                                        .mapToObj(i -> aabb(16, 16 * (layer - 4) / 4.0 + (i + 1.0) / SLOPE_SUBDIVISIONS * 16 * (1 - (layer - 4) / 4.0), 16.0 / SLOPE_SUBDIVISIONS).move(0, 0, i * 16.0 / SLOPE_SUBDIVISIONS))
+                                                        .mapToObj(i -> aabb(16, 4 * low + (i + 1.0) / SLOPE_SUBDIVISIONS * 4 * (high - low), 16.0 / SLOPE_SUBDIVISIONS).move(0, 0, i * 16.0 / SLOPE_SUBDIVISIONS))
                                                         .toArray(MutableAABB[]::new)
                                         ).outline(
                                                 line(vec3(0, 0, 0), vec3(16, 0, 0)),
                                                 line(vec3(0, 0, 16), vec3(16, 0, 16)),
                                                 line(vec3(0, 0, 0), vec3(0, 0, 16)),
                                                 line(vec3(16, 0, 0), vec3(16, 0, 16)),
-                                                line(vec3(0, 0, 0), vec3(0, (layer - 4) * 4, 0)),
-                                                line(vec3(16, 0, 0), vec3(16, (layer - 4) * 4, 0)),
-                                                line(vec3(0, 0, 16), vec3(0, 16, 16)),
-                                                line(vec3(16, 0, 16), vec3(16, 16, 16)),
-                                                line(vec3(0, 16, 16), vec3(16, 16, 16)),
-                                                line(vec3(0, (layer - 4) * 4, 0), vec3(16, (layer - 4) * 4, 0)),
-                                                line(vec3(0, (layer - 4) * 4, 0), vec3(0, 16, 16)),
-                                                line(vec3(16, (layer - 4) * 4, 0), vec3(16, 16, 16))
+                                                line(vec3(0, 0, 0), vec3(0, low * 4, 0)),
+                                                line(vec3(16, 0, 0), vec3(16, low * 4, 0)),
+                                                line(vec3(0, 0, 16), vec3(0, high * 4, 16)),
+                                                line(vec3(16, 0, 16), vec3(16, high * 4, 16)),
+                                                line(vec3(0, high * 4, 16), vec3(16, high * 4, 16)),
+                                                line(vec3(0, low * 4, 0), vec3(16, low * 4, 0)),
+                                                line(vec3(0, low * 4, 0), vec3(0, high * 4, 16)),
+                                                line(vec3(16, low * 4, 0), vec3(16, high * 4, 16))
                                         );
 
                                 MutableShape shape = baseShape.copy();
@@ -224,7 +227,7 @@ public class CCShapes {
                             }
                     ))));
     public static final Map<Direction, Map<Half, Map<Integer, MutableShape>>> VERTICAL_SLOPE_LAYER =
-            forHorizontalDirections(forAll(HALF, half -> forAll(LAYERS,
+            forHorizontalDirections(forAll(HALF, half -> forAll(CopycatSlopeLayerBlock.LAYERS,
                     layer -> SLOPE_LAYER.get(Direction.SOUTH).get(Half.BOTTOM).get(false).get(layer).copy()
                             .rotateZ(-90).flipX(half == Half.TOP)
             )));

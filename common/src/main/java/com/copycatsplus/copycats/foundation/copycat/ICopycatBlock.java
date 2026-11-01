@@ -350,7 +350,10 @@ public interface ICopycatBlock extends IWrenchable, IStateType, TransformableBlo
      * Utility to get the required items for a layer of a block state.
      */
     static ItemRequirement getRequiredItemsForLayer(BlockState state, IntegerProperty property) {
-        int count = state.getValue(property);
+        return getRequiredItemsForLayer(state, state.getValue(property));
+    }
+
+    static ItemRequirement getRequiredItemsForLayer(BlockState state, int count) {
         if (count == 0)
             return ItemRequirement.NONE;
         return new ItemRequirement(IntStream.range(0, count).mapToObj($ -> new ItemRequirement.StackRequirement(
