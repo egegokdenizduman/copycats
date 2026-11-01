@@ -27,6 +27,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.client.ChunkRenderTypeSet;
+import net.neoforged.neoforge.client.model.QuadTransformers;
 import net.neoforged.neoforge.client.model.data.ModelData;
 import net.neoforged.neoforge.client.model.data.ModelProperty;
 import net.neoforged.neoforge.common.util.TriState;
@@ -46,6 +47,7 @@ public class CopycatModelNeoForge extends BakedModelWrapperWithData {
     public static final ModelProperty<Map<String, BlockState>> MATERIALS_PROPERTY = new ModelProperty<>();
     private static final ModelProperty<Map<String, OcclusionData>> OCCLUSION_PROPERTY = new ModelProperty<>();
     private static final ModelProperty<Map<String, ModelData>> WRAPPED_DATA_PROPERTY = new ModelProperty<>();
+    private static final ModelProperty<Set<String>> EMISSIVE_PROPERTY = new ModelProperty<>();
 
     private static final ChunkRenderTypeSet allRenderTypes = ChunkRenderTypeSet.of(RenderType.solid(), RenderType.cutout(), RenderType.cutoutMipped(), RenderType.translucent());
 
@@ -117,6 +119,13 @@ public class CopycatModelNeoForge extends BakedModelWrapperWithData {
             return builder;
 
         builder.with(MATERIALS_PROPERTY, new HashMap<>(materials));
+
+        Set<String> emissive = new HashSet<>();
+        for (Map.Entry<String, BlockState> s : materials.entrySet()) {
+            if (s.getValue().emissiveRendering(world, pos))
+                emissive.add(s.getKey());
+        }
+        builder.with(EMISSIVE_PROPERTY, emissive);
 
         if (!(state.getBlock() instanceof ICopycatBlock copycatBlock))
             return builder;
@@ -211,6 +220,7 @@ public class CopycatModelNeoForge extends BakedModelWrapperWithData {
         Map<String, BlockState> materials = getMaterials(data);
         Map<String, OcclusionData> occlusionDataMap = getOcclusion(data);
         Map<String, ModelData> wrappedDataMap = getWrappedData(data);
+        Set<String> emissive = getEmissive(data);
         final boolean isVirtual = VirtualRenderHelper.isVirtual(data);
         for (CopycatModelCore.ModelEntry entry : entries) {
             BlockState material = entry.materialMapper().map(state, materials.get(entry.key()));
@@ -264,6 +274,10 @@ public class CopycatModelNeoForge extends BakedModelWrapperWithData {
                 // Copycat quads are already culled. Set it to null to avoid interference from sodium
                 if (entry.type().useCopycatLogic())
                     croppedQuad.cullFace = null;
+
+                // process() works on a copy: the vertices can be shared with the material's own model
+                if (entry.type().useCopycatLogic() && emissive.contains(entry.key()))
+                    croppedQuad = new CopycatRenderContextNeoForge.CopycatBakedQuad(QuadTransformers.settingMaxEmissivity().process(croppedQuad), croppedQuad.cullFace, croppedQuad.property);
 
                 allQuads.add(croppedQuad);
             }
@@ -346,6 +360,11 @@ public class CopycatModelNeoForge extends BakedModelWrapperWithData {
     public static @NotNull Map<String, ModelData> getWrappedData(ModelData data) {
         Map<String, ModelData> wrappedData = data == null ? null : data.get(WRAPPED_DATA_PROPERTY);
         return wrappedData == null ? Map.of() : wrappedData;
+    }
+
+    public static @NotNull Set<String> getEmissive(ModelData data) {
+        Set<String> emissive = data == null ? null : data.get(EMISSIVE_PROPERTY);
+        return emissive == null ? Set.of() : emissive;
     }
 
     public static class OcclusionData {
