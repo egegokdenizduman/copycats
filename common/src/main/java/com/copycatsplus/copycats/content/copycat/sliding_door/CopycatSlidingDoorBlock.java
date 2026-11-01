@@ -4,6 +4,8 @@ import com.copycatsplus.copycats.CCBlockEntityTypes;
 import com.copycatsplus.copycats.content.copycat.door.CopycatDoorBlock;
 import com.copycatsplus.copycats.foundation.copycat.ICopycatBlock;
 import com.copycatsplus.copycats.foundation.copycat.ICopycatBlockEntity;
+import com.copycatsplus.copycats.foundation.copycat.ICustomCTBlocking;
+import com.copycatsplus.copycats.foundation.copycat.model.kinetic.WrappedRenderWorld;
 import com.copycatsplus.copycats.utility.BlockEntityUtils;
 import com.copycatsplus.copycats.utility.InteractionUtils;
 import com.simibubi.create.AllBlocks;
@@ -36,10 +38,11 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.annotation.ParametersAreNonnullByDefault;
+import java.util.Optional;
 
 @ParametersAreNonnullByDefault
 @MethodsReturnNonnullByDefault
-public class CopycatSlidingDoorBlock extends SlidingDoorBlock implements ICopycatBlock {
+public class CopycatSlidingDoorBlock extends SlidingDoorBlock implements ICopycatBlock, ICustomCTBlocking {
 
     public static BooleanProperty CT = CopycatDoorBlock.CT;
 
@@ -130,12 +133,23 @@ public class CopycatSlidingDoorBlock extends SlidingDoorBlock implements ICopyca
 
     @Override
     public boolean isIgnoredConnectivitySide(BlockAndTintGetter reader, BlockState state, Direction face, BlockPos fromPos, @Nullable BlockPos toPos, @Nullable BlockState toState) {
-        return true;
+        return toPos == null || !connectsToOtherHalf(reader, state, fromPos, toPos);
     }
 
     @Override
     public boolean canConnectTexturesToward(BlockAndTintGetter reader, BlockPos fromPos, BlockPos toPos, BlockState state) {
-        return false;
+        return fromPos.equals(toPos) || connectsToOtherHalf(reader, state, fromPos, toPos);
+    }
+
+    @Override
+    public Optional<Boolean> isCTBlocked(BlockAndTintGetter reader, BlockState state, BlockPos pos, BlockPos connectingPos, BlockPos blockingPos, Direction face) {
+        return Optional.of(false);
+    }
+
+    private static boolean connectsToOtherHalf(BlockAndTintGetter reader, BlockState state, BlockPos pos, BlockPos otherPos) {
+        // While moving, neighbours read as the material, so assume the other half is there
+        BlockState otherState = reader instanceof WrappedRenderWorld ? state.cycle(HALF) : reader.getBlockState(otherPos);
+        return CopycatDoorBlock.isOtherHalf(state, pos, otherPos, otherState);
     }
 
     @Override

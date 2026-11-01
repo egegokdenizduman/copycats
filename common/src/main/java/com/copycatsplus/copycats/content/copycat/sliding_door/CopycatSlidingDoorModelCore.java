@@ -4,6 +4,7 @@ import com.copycatsplus.copycats.foundation.copycat.model.CopycatModelCore;
 import com.copycatsplus.copycats.foundation.copycat.model.assembly.AssemblyTransform;
 import com.copycatsplus.copycats.foundation.copycat.model.assembly.CopycatRenderContext;
 import com.simibubi.create.content.decoration.slidingDoor.SlidingDoorBlock;
+import com.simibubi.create.foundation.block.connected.CTModel;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
@@ -39,13 +40,17 @@ public class CopycatSlidingDoorModelCore extends CopycatModelCore {
         }
 
         if (state.getValue(CopycatSlidingDoorBlock.CT)) {
-            assembleWithCT(state, context);
+            assembleWithCT(state, context, getModelOf(material) instanceof CTModel);
         } else {
             assembleWithoutCT(state, context);
         }
     }
 
-    private void assembleWithCT(BlockState state, CopycatRenderContext context) {
+    // Plain tiles reuse their middle to hide the seam. Connected tiles already have none, so keep them in place
+    private void assembleWithCT(BlockState state, CopycatRenderContext context, boolean connected) {
+        int lowerSeamY = connected ? 12 : 4;
+        int upperSeamY = connected ? 0 : 8;
+        int seamCull = connected ? UP | DOWN : 0;
         int rot = (int) state.getValue(DoorBlock.FACING).toYRot();
         DoubleBlockHalf half = state.getValue(DoorBlock.HALF);
         AssemblyTransform transform = t -> t.rotateY(rot);
@@ -57,8 +62,8 @@ public class CopycatSlidingDoorModelCore extends CopycatModelCore {
                     cull(SOUTH | UP));
             context.assemblePiece(transform,
                     vec3(0, 12, 0),
-                    aabb(16, 4, 2).move(0, 4, 0),
-                    cull(SOUTH | DOWN | (kinetic ? UP : 0)));
+                    aabb(16, 4, 2).move(0, lowerSeamY, 0),
+                    cull(SOUTH | DOWN | seamCull | (kinetic ? UP : 0)));
             //Back
             context.assemblePiece(transform,
                     vec3(0, 0, 2),
@@ -66,8 +71,8 @@ public class CopycatSlidingDoorModelCore extends CopycatModelCore {
                     cull(NORTH | UP));
             context.assemblePiece(transform,
                     vec3(0, 12, 2),
-                    aabb(16, 4, 1).move(0, 4, 15),
-                    cull(NORTH | DOWN | (kinetic ? UP : 0)));
+                    aabb(16, 4, 1).move(0, lowerSeamY, 15),
+                    cull(NORTH | DOWN | seamCull | (kinetic ? UP : 0)));
         } else {
             //Front
             context.assemblePiece(transform,
@@ -76,8 +81,8 @@ public class CopycatSlidingDoorModelCore extends CopycatModelCore {
                     cull(SOUTH | DOWN));
             context.assemblePiece(transform,
                     vec3(0, 0, 0),
-                    aabb(16, 4, 2).move(0, 8, 0),
-                    cull(SOUTH | UP | (kinetic ? DOWN : 0)));
+                    aabb(16, 4, 2).move(0, upperSeamY, 0),
+                    cull(SOUTH | UP | seamCull | (kinetic ? DOWN : 0)));
             //Back
             context.assemblePiece(transform,
                     vec3(0, 4, 2),
@@ -85,8 +90,8 @@ public class CopycatSlidingDoorModelCore extends CopycatModelCore {
                     cull(NORTH | DOWN));
             context.assemblePiece(transform,
                     vec3(0, 0, 2),
-                    aabb(16, 4, 1).move(0, 8, 15),
-                    cull(NORTH | UP | (kinetic ? DOWN : 0)));
+                    aabb(16, 4, 1).move(0, upperSeamY, 15),
+                    cull(NORTH | UP | seamCull | (kinetic ? DOWN : 0)));
         }
     }
 

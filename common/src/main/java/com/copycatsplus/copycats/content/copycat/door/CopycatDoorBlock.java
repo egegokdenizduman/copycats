@@ -139,8 +139,8 @@ public class CopycatDoorBlock extends DoorBlock implements ICopycatBlock, IBE<CC
     }
 
     // Only the two halves of one door connect, so neighbouring and stacked doors stay separate
-    private boolean isOtherHalf(BlockState state, BlockPos pos, BlockPos otherPos, BlockState otherState) {
-        if (!state.is(this) || !state.getValue(CT) || !otherState.is(this))
+    public static boolean isOtherHalf(BlockState state, BlockPos pos, BlockPos otherPos, BlockState otherState) {
+        if (!state.is(otherState.getBlock()) || !state.getValue(CT))
             return false;
         boolean lower = state.getValue(HALF) == DoubleBlockHalf.LOWER;
         return otherState.getValue(HALF) != state.getValue(HALF) && otherPos.equals(lower ? pos.above() : pos.below());
