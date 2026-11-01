@@ -11,6 +11,8 @@ import com.copycatsplus.copycats.foundation.copycat.multistate.IMultiStateCopyca
 import com.copycatsplus.copycats.foundation.copycat.multistate.IMultiStateCopycatBlockEntity;
 import com.copycatsplus.copycats.utility.neoforge.ModelDataUtils;
 import com.simibubi.create.AllBlocks;
+import com.simibubi.create.content.decoration.copycat.CopycatModel;
+import com.simibubi.create.content.decoration.copycat.CopycatSpecialCases;
 import com.simibubi.create.foundation.model.BakedModelWrapperWithData;
 import net.createmod.catnip.data.Iterate;
 import net.createmod.ponder.render.VirtualRenderHelper;
@@ -24,6 +26,7 @@ import net.minecraft.core.Vec3i;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.DirectionalBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.client.ChunkRenderTypeSet;
@@ -251,6 +254,14 @@ public class CopycatModelNeoForge extends BakedModelWrapperWithData {
             }
             if (VirtualRenderHelper.isVirtual(wrappedData) != isVirtual) {
                 wrappedData = ModelDataUtils.mergeData(wrappedData, VirtualRenderHelper.VIRTUAL_DATA).build();
+            }
+
+            // Create's bars model retextures itself with the material it finds in its model data
+            Direction barsFacing = entry.type().useCopycatLogic() && CopycatSpecialCases.isBarsMaterial(material) ? core.getBarsFacing(entry.key()) : null;
+            if (barsFacing != null) {
+                wrappedState = AllBlocks.COPYCAT_BARS.getDefaultState().setValue(DirectionalBlock.FACING, barsFacing);
+                wrappedData = ModelData.builder().with(CopycatModel.MATERIAL_PROPERTY, material).build();
+                model = getModelOf(wrappedState);
             }
 
             List<CopycatRenderContextNeoForge.CopycatBakedQuad> quads = new ArrayList<>();

@@ -13,6 +13,7 @@ import com.copycatsplus.copycats.utility.BlockFaceUtils;
 import com.google.common.collect.ImmutableMap;
 import com.simibubi.create.api.schematic.requirement.SpecialBlockItemRequirement;
 import com.simibubi.create.content.contraptions.StructureTransform;
+import com.simibubi.create.content.decoration.copycat.CopycatSpecialCases;
 import com.simibubi.create.content.equipment.wrench.IWrenchable;
 import com.simibubi.create.content.schematics.requirement.ItemRequirement;
 import net.createmod.catnip.data.Iterate;
@@ -156,6 +157,11 @@ public class CopycatBoardBlock extends WaterloggedMultiStateCopycatBlock impleme
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> pBuilder) {
         super.createBlockStateDefinition(pBuilder.add(UP, DOWN, NORTH, SOUTH, EAST, WEST));
+    }
+
+    @Override
+    public boolean isAcceptedRegardless(BlockState material) {
+        return CopycatSpecialCases.isBarsMaterial(material);
     }
 
     @Override

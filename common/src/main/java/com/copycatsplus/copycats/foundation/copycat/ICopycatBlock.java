@@ -1,5 +1,6 @@
 package com.copycatsplus.copycats.foundation.copycat;
 
+import com.copycatsplus.copycats.content.copycat.board.CopycatBoardBlock;
 import com.copycatsplus.copycats.foundation.copycat.model.ScaledBlockAndTintGetter;
 import com.copycatsplus.copycats.foundation.copycat.multistate.IMultiStateCopycatBlock;
 import com.copycatsplus.copycats.utility.BlockEntityUtils;
@@ -9,6 +10,7 @@ import com.simibubi.create.AllItems;
 import com.simibubi.create.AllTags;
 import com.simibubi.create.api.contraption.transformable.TransformableBlock;
 import com.simibubi.create.content.contraptions.StructureTransform;
+import com.simibubi.create.content.decoration.copycat.CopycatSpecialCases;
 import com.simibubi.create.content.equipment.wrench.IWrenchable;
 import com.simibubi.create.content.schematics.requirement.ItemRequirement;
 import com.simibubi.create.foundation.block.IBE;
@@ -622,6 +624,10 @@ public interface ICopycatBlock extends IWrenchable, IStateType, TransformableBlo
             BlockState neighborMaterial = neighborState.getBlock() instanceof IMultiStateCopycatBlock && level instanceof ScaledBlockAndTintGetter scaledLevel
                     ? IMultiStateCopycatBlock.getMaterial(level, toPos, scaledLevel.getPropertyForRender(neighborState, toPos))
                     : neighborState.getBlock() instanceof ICopycatBlock ? ICopycatBlock.getMaterial(level, toPos) : neighborState;
+            // Bars on matching board faces join without an edge, like Create's panels
+            if (state.getBlock() instanceof CopycatBoardBlock
+                    && CopycatSpecialCases.isBarsMaterial(material) && CopycatSpecialCases.isBarsMaterial(neighborMaterial))
+                return true;
             return material.skipRendering(neighborMaterial, dir.getOpposite());
         }
 

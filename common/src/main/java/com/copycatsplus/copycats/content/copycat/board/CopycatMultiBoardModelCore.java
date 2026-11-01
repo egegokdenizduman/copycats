@@ -3,6 +3,7 @@ package com.copycatsplus.copycats.content.copycat.board;
 import com.copycatsplus.copycats.CCBlocks;
 import com.copycatsplus.copycats.foundation.copycat.model.CopycatModelCore;
 import com.copycatsplus.copycats.foundation.copycat.model.assembly.CopycatRenderContext;
+import com.simibubi.create.content.decoration.copycat.CopycatSpecialCases;
 import net.createmod.catnip.data.Iterate;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.state.BlockState;
@@ -28,6 +29,11 @@ public class CopycatMultiBoardModelCore extends CopycatModelCore {
     }
 
     @Override
+    public Direction getBarsFacing(String key) {
+        return Direction.byName(key.toLowerCase(Locale.ROOT)).getOpposite();
+    }
+
+    @Override
     public void emitCopycatQuads(String key, BlockState state, CopycatRenderContext context, BlockState material) {
         Map<Direction, Boolean> sides = new HashMap<>();
         for (Direction direction : Iterate.directions) {
@@ -38,6 +44,11 @@ public class CopycatMultiBoardModelCore extends CopycatModelCore {
 
         if (!sides.get(direction))
             return;
+
+        if (CopycatSpecialCases.isBarsMaterial(material)) {
+            context.assembleAll();
+            return;
+        }
 
         if (direction.getAxis().isVertical()) {
             context.assemblePiece(

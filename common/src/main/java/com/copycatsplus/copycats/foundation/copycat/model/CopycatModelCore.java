@@ -8,6 +8,7 @@ import com.copycatsplus.copycats.utility.BlockUtils;
 import dev.architectury.injectables.annotations.ExpectPlatform;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.model.BakedModel;
+import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.NotNull;
 
@@ -90,6 +91,17 @@ public abstract class CopycatModelCore implements CopycatModelPart {
     public void prepareForRender() {
         enhanced = CCConfigs.client().useEnhancedModels.get();
         colorize = CCConfigs.client().colorizeMultiStates.get();
+    }
+
+    /**
+     * Get the facing of Create's copycat bars model that replaces a part whose material is bars.
+     *
+     * @param key The key of the model entry.
+     * @return The facing, or null if the material should be cropped like any other.
+     */
+    @Nullable
+    public Direction getBarsFacing(String key) {
+        return null;
     }
 
     /**
