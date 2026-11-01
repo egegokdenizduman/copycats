@@ -146,7 +146,7 @@ public class CCShapes {
                             })
                                     .flipX(side == Side.RIGHT)
             ));
-    private static final int SLOPE_SUBDIVISIONS = 8;
+    private static final int SLOPE_SUBDIVISIONS = 16;
     private static final double SLOPE_STEP = 16.0 / SLOPE_SUBDIVISIONS;
     public static final Map<Direction, Map<Half, Map<StairsShape, MutableShape>>> SLOPE =
             forHorizontalDirections(forHalves(forAll(STAIRS_SHAPE,
@@ -288,37 +288,6 @@ public class CCShapes {
                         };
                     }
             )));
-    // Entity.collide takes the lowest step that helps, so one tick crosses only one riser.
-    // Floor slopes walk on half block treads, wider than a sprint tick, like vanilla stairs.
-    public static final Map<Direction, Map<StairsShape, MutableShape>> SLOPE_COLLISION =
-            forHorizontalDirections(forAll(STAIRS_SHAPE,
-                    slopeShape -> slopeTreads(slopeShape, 8, 16)
-            ));
-    // the steep run's treads carry on across its pieces at half a block, 11 keeps a notch so it isn't a full block
-    public static final Map<Direction, Map<StairsShape, Map<Integer, MutableShape>>> SLOPE_LAYER_COLLISION =
-            forHorizontalDirections(forAll(STAIRS_SHAPE, CopycatSlopeLayerBlock.LAYERS,
-                    (slopeShape, layer) -> layer == 11
-                            ? shape(aabb(16, CopycatSlopeLayerBlock.getSurfaceHeight(layer, 4), 4), aabb(16, 16, 12).move(0, 0, 4))
-                            : slopeTreads(slopeShape, CopycatSlopeLayerBlock.getSurfaceHeight(layer, 8), CopycatSlopeLayerBlock.getSurfaceHeight(layer, 16))
-            ));
-
-    private static MutableShape slopeTreads(StairsShape slopeShape, double middle, double high) {
-        return switch (slopeShape) {
-            case STRAIGHT -> shape(
-                    aabb(16, middle, 8),
-                    aabb(16, high, 8).move(0, 0, 8)
-            );
-            case INNER_LEFT, INNER_RIGHT -> shape(
-                    aabb(16, middle, 16),
-                    aabb(16, high, 8).move(0, 0, 8),
-                    aabb(8, high, 8).move(8, 0, 0)
-            ).flipX(slopeShape == StairsShape.INNER_RIGHT);
-            case OUTER_LEFT, OUTER_RIGHT -> shape(
-                    aabb(16, middle, 16),
-                    aabb(8, high, 8).move(8, 0, 8)
-            ).flipX(slopeShape == StairsShape.OUTER_RIGHT);
-        };
-    }
 
     // a steep run piece, flat on one side of the kink
     private static MutableShape kinkedSlopeLayer(int layer) {
