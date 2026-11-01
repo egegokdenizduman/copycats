@@ -37,19 +37,17 @@ public class CopycatFoldingDoorModelCore extends CopycatModelCore {
         if (!kinetic && !state.getValue(SlidingDoorBlock.VISIBLE)) {
             return;
         }
-        // A leaf is too narrow for the whole tile. Windows keep their middle so the glass stays, others keep their edges
+        // A window spans both leaves as one image, the leaves meet at its centre. Others keep their tile edges on each leaf
         boolean window = material.getBlock() instanceof WindowBlock;
-        int leftX = window ? 4 : 0;
-        int rightX = window ? 8 : 12;
         if (state.getValue(CopycatSlidingDoorBlock.CT)) {
-            assembleWithCT(state, context, getModelOf(material) instanceof CTModel, leftX, rightX);
+            assembleWithCT(state, context, getModelOf(material) instanceof CTModel, window);
         } else {
-            assembleWithoutCT(state, context, leftX, rightX);
+            assembleWithoutCT(state, context, window);
         }
     }
 
     // Plain tiles reuse their middle to hide the seam. Connected tiles already have none, so keep them in place
-    private void assembleWithCT(BlockState state, CopycatRenderContext context, boolean connected, int leftX, int rightX) {
+    private void assembleWithCT(BlockState state, CopycatRenderContext context, boolean connected, boolean window) {
         int lowerSeamY = connected ? 12 : 4;
         int upperSeamY = connected ? 0 : 8;
         int seamCull = connected ? UP | DOWN : 0;
@@ -62,6 +60,8 @@ public class CopycatFoldingDoorModelCore extends CopycatModelCore {
             Direction facing = state.getValue(DoorBlock.FACING);
             int rot = kinetic ? 270 : (int) facing.toYRot();
             int offset = left || kinetic ? 8 : 0;
+            int leftX = window && left ? 8 : 0;
+            int rightX = window ? leftX + 4 : 12;
 
             DoubleBlockHalf half = state.getValue(DoorBlock.HALF);
             AssemblyTransform transform = t -> t.rotateY(rot);
@@ -139,7 +139,7 @@ public class CopycatFoldingDoorModelCore extends CopycatModelCore {
         }
     }
 
-    private void assembleWithoutCT(BlockState state, CopycatRenderContext context, int leftX, int rightX) {
+    private void assembleWithoutCT(BlockState state, CopycatRenderContext context, boolean window) {
         for (boolean left : Iterate.falseAndTrue) {
             if (kinetic && left != this.left)
                 continue;
@@ -149,6 +149,8 @@ public class CopycatFoldingDoorModelCore extends CopycatModelCore {
             Direction facing = state.getValue(DoorBlock.FACING);
             int rot = kinetic ? 270 : (int) facing.toYRot();
             int offset = left || kinetic ? 8 : 0;
+            int leftX = window && left ? 8 : 0;
+            int rightX = window ? leftX + 4 : 12;
 
             DoubleBlockHalf half = state.getValue(DoorBlock.HALF);
             AssemblyTransform transform = t -> t.rotateY(rot);
