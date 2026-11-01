@@ -25,7 +25,7 @@ public class CopycatSlopeLayerModelCore extends CopycatModelCore {
             boolean flipX = shape == StairsShape.INNER_RIGHT || shape == StairsShape.OUTER_RIGHT;
             boolean inner = shape == StairsShape.INNER_LEFT || shape == StairsShape.INNER_RIGHT;
             AssemblyTransform corner = t -> t.flipX(flipX).flipY(half == Half.TOP).rotateY((int) facing.toYRot());
-            CopycatSlopeModelCore.assembleCorner(context, corner, inner, low, high);
+            CopycatSlopeModelCore.assembleCorner(context, corner, inner, low, high, enhanced);
             return;
         }
 

@@ -3,14 +3,22 @@ package com.copycatsplus.copycats.content.copycat.slope;
 import com.copycatsplus.copycats.foundation.copycat.model.CopycatModelCore;
 import com.copycatsplus.copycats.foundation.copycat.model.assembly.CopycatRenderContext;
 import com.copycatsplus.copycats.foundation.copycat.model.assembly.AssemblyTransform;
+import com.copycatsplus.copycats.foundation.copycat.model.assembly.MutableAABB;
+import com.copycatsplus.copycats.foundation.copycat.model.assembly.MutableCullFace;
+import com.copycatsplus.copycats.foundation.copycat.model.assembly.MutableUV;
 import com.copycatsplus.copycats.foundation.copycat.model.assembly.MutableVec3;
 import com.copycatsplus.copycats.foundation.copycat.model.assembly.MutableVertex;
-import com.copycatsplus.copycats.foundation.copycat.model.assembly.quad.QuadSlope;
 import com.copycatsplus.copycats.foundation.copycat.model.assembly.quad.QuadTransform;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Half;
 import net.minecraft.world.level.block.state.properties.StairsShape;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 import static com.copycatsplus.copycats.foundation.copycat.model.assembly.CopycatRenderContext.*;
 import static com.copycatsplus.copycats.foundation.copycat.model.assembly.MutableCullFace.*;
@@ -20,6 +28,7 @@ public class CopycatSlopeModelCore extends CopycatModelCore {
 
     // Width of the edge band, matching the 2 pixel border of framed textures like casings
     private static final double ENHANCED_MARGIN = 2;
+    private static final double DIAGONAL_EPSILON = 1.0E-5;
 
     @Override
     public void emitCopycatQuads(String key, BlockState state, CopycatRenderContext context, BlockState material) {
@@ -32,50 +41,100 @@ public class CopycatSlopeModelCore extends CopycatModelCore {
         AssemblyTransform transform = t -> t.flipX(flipX).flipY(flipY).rotateY(rot);
         switch (shape) {
             case STRAIGHT -> assembleSlope(context, transform, 0, 16, enhanced);
-            case INNER_LEFT, INNER_RIGHT -> assembleCorner(context, transform, true, 0, 16);
-            case OUTER_LEFT, OUTER_RIGHT -> assembleCorner(context, transform, false, 0, 16);
+            case INNER_LEFT, INNER_RIGHT -> assembleCorner(context, transform, true, 0, 16, enhanced);
+            case OUTER_LEFT, OUTER_RIGHT -> assembleCorner(context, transform, false, 0, 16, enhanced);
         }
     }
 
     /**
-     * Assembles a corner of two slopes meeting along the x = z diagonal. The surface rises from minHeight to maxHeight
-     * along max(x, z) for an inner corner and min(x, z) for an outer one, so each half of the surface is a flat triangle.
+     * Assembles a corner of two slopes meeting along the x = z diagonal, rising along max(x, z) for an inner corner and
+     * min(x, z) for an outer one. Each half is the straight slope of that arm, the second one mirrored across the
+     * diagonal, so every edge shared with a straight neighbour matches it.
      */
-    public static void assembleCorner(CopycatRenderContext context, AssemblyTransform transform, boolean inner, double minHeight, double maxHeight) {
-        QuadSlope.QuadSlopeFunction height = (x, z) -> minHeight + (inner ? Math.max(x, z) : Math.min(x, z)) * (maxHeight - minHeight) / 16;
-        // the low walls of an outer corner have no height unless it starts above the floor
-        int emptyFaces = !inner && minHeight == 0 ? NORTH | WEST : 0;
-        context.assemblePiece(
-                transform,
-                vec3(0, 0, 0),
-                aabb(16, 16, 16),
-                cull(UP | emptyFaces),
-                updateUV(slope(Direction.UP, height))
-        );
-        for (boolean highX : new boolean[]{true, false}) {
-            context.assemblePiece(
-                    transform,
-                    vec3(0, 0, 0),
-                    aabb(16, 16, 16),
-                    cull(DOWN | NORTH | SOUTH | EAST | WEST),
-                    updateUV(clipToDiagonal(highX), slope(Direction.UP, height))
-            );
+    public static void assembleCorner(CopycatRenderContext context, AssemblyTransform transform, boolean inner, double minHeight, double maxHeight, boolean enhanced) {
+        AssemblyTransform mirror = t -> t.rotateY(270).flipZ(true);
+        for (boolean secondPart : new boolean[]{false, true}) {
+            // the mirror swaps x and z, so both arms keep the same side in their own space
+            CopycatRenderContext clipped = new ClippedContext(context, clipToDiagonal(!inner, secondPart));
+            assembleSlope(clipped, transform, minHeight, maxHeight, enhanced);
+            assembleSlope(clipped, mirror.andThen(transform), minHeight, maxHeight, enhanced);
         }
     }
 
     /**
-     * Moves vertices on the wrong side of the x = z diagonal onto it, leaving the part of the quad on the kept side.
+     * Cuts the quad along the x = z diagonal, keeping one side. New corners take their position and UV from the edge
+     * they cut. A cut can leave five corners, more than a quad holds, so secondPart gives the quad for the last ones.
      */
-    private static QuadTransform clipToDiagonal(boolean keepHighX) {
+    private static QuadTransform clipToDiagonal(boolean keepHighX, boolean secondPart) {
         return (quad, sprite) -> {
-            for (MutableVertex vertex : quad.vertices) {
-                MutableVec3 xyz = vertex.xyz;
-                if (keepHighX ? xyz.x < xyz.z : xyz.x > xyz.z) {
-                    xyz.x = xyz.z = (xyz.x + xyz.z) / 2;
-                }
+            List<MutableVertex> kept = new ArrayList<>();
+            boolean inside = false;
+            for (int i = 0; i < 4; i++) {
+                MutableVertex from = quad.vertices.get(i);
+                MutableVertex to = quad.vertices.get((i + 1) % 4);
+                double fromSide = diagonalSide(from, keepHighX);
+                double toSide = diagonalSide(to, keepHighX);
+                inside |= fromSide > 0;
+                if (fromSide >= 0) kept.add(from);
+                if (fromSide * toSide < 0) kept.add(lerp(from, to, fromSide / (fromSide - toSide)));
             }
+            if (!inside || (secondPart && kept.size() < 5)) return false;
+            if (secondPart) kept = List.of(kept.get(0), kept.get(3), kept.get(4));
+            // a triangle repeats its last corner, as a separate vertex because transforms visit each one
+            List<MutableVertex> vertices = new ArrayList<>(kept.subList(0, Math.min(kept.size(), 4)));
+            while (vertices.size() < 4) vertices.add(lerp(vertices.get(2), vertices.get(2), 0));
+            quad.vertices = vertices;
             return true;
         };
+    }
+
+    private static double diagonalSide(MutableVertex vertex, boolean keepHighX) {
+        double side = keepHighX ? vertex.xyz.x - vertex.xyz.z : vertex.xyz.z - vertex.xyz.x;
+        return Math.abs(side) < DIAGONAL_EPSILON ? 0 : side;
+    }
+
+    private static MutableVertex lerp(MutableVertex from, MutableVertex to, double amount) {
+        MutableVec3 xyz = from.xyz.copy().scale(1 - amount).add(to.xyz.copy().scale(amount));
+        float u = from.uv.u + (to.uv.u - from.uv.u) * (float) amount;
+        float v = from.uv.v + (to.uv.v - from.uv.v) * (float) amount;
+        return new MutableVertex(xyz, new MutableUV(u, v));
+    }
+
+    /**
+     * Runs a transform on every quad after the piece's own transforms.
+     */
+    private record ClippedContext(CopycatRenderContext context, QuadTransform clip) implements CopycatRenderContext {
+
+        private QuadTransform[] withClip(QuadTransform... transforms) {
+            QuadTransform[] all = Arrays.copyOf(transforms, transforms.length + 1);
+            all[transforms.length] = clip;
+            return all;
+        }
+
+        @Override
+        public void assemblePiece(AssemblyTransform assemblyTransform, MutableVec3 offset, MutableAABB select, MutableCullFace cull) {
+            context.assemblePiece(assemblyTransform, offset, select, cull, clip);
+        }
+
+        @Override
+        public void assemblePiece(AssemblyTransform assemblyTransform, MutableVec3 offset, MutableAABB select, MutableCullFace cull, QuadTransform... transforms) {
+            context.assemblePiece(assemblyTransform, offset, select, cull, withClip(transforms));
+        }
+
+        @Override
+        public void assembleAll() {
+            context.assembleAll();
+        }
+
+        @Override
+        public void assembleRaw(AABB crop, Vec3 move) {
+            context.assembleRaw(crop, move, clip);
+        }
+
+        @Override
+        public void assembleRaw(AABB crop, Vec3 move, QuadTransform... transforms) {
+            context.assembleRaw(crop, move, withClip(transforms));
+        }
     }
 
     /**
