@@ -14,9 +14,11 @@ import net.minecraft.core.Vec3i;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.shapes.*;
 
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -199,13 +201,78 @@ public class BlockFaceUtils {
                                     Direction fromFace,
                                     Direction textureFace) {
         if (textureFace.getAxis() == fromFace.getAxis()) return false;
-        if (!(fromState.getBlock() instanceof ICopycatBlock) || !(toState.getBlock() instanceof ICopycatBlock)) return false;
-        if (fromState.getBlock() instanceof IMultiStateCopycatBlock || toState.getBlock() instanceof IMultiStateCopycatBlock) return false;
-        VoxelShape band = FACE_BANDS[textureFace.ordinal()];
-        VoxelShape fromEdge = Shapes.join(fromState.getFaceOcclusionShape(level, fromPos, fromFace), band, BooleanOp.AND);
+        if (!canCompareEdges(fromState, toState)) return false;
+        VoxelShape fromEdge = getEdge(level, fromState, fromPos, fromFace, textureFace);
         if (fromEdge.isEmpty()) return false;
-        VoxelShape toEdge = Shapes.join(toState.getFaceOcclusionShape(level, toPos, fromFace.getOpposite()), band, BooleanOp.AND);
+        VoxelShape toEdge = getEdge(level, toState, toPos, fromFace.getOpposite(), textureFace);
+        if (CopycatExternalContext.shouldConnectPartialEdges())
+            return Shapes.joinIsNotEmpty(fromEdge, toEdge, BooleanOp.AND);
         return !Shapes.joinIsNotEmpty(fromEdge, toEdge, BooleanOp.NOT_SAME);
+    }
+
+    /**
+     * Find where the second connected texture result of a copycat replaces the normal one: on each flush face that
+     * partly meets an adjacent copycat of the same material, the half of the face beside that seam, along the length of
+     * the seam. A connection only changes the texture on the side that it connects to, so the rest of the face keeps
+     * its normal border.
+     *
+     * @return The regions in block space for each textured face. Empty if the copycat has no partial seams.
+     */
+    public static Map<Direction, List<AABB>> getPartialEdgeRegions(BlockGetter level, BlockPos pos, BlockState state, BlockState material) {
+        Map<Direction, List<AABB>> regions = new EnumMap<>(Direction.class);
+        for (Direction side : Direction.values()) {
+            BlockPos neighbourPos = pos.relative(side);
+            BlockState neighbour = level.getBlockState(neighbourPos);
+            if (!canCompareEdges(state, neighbour) || !ICopycatBlock.getMaterial(level, neighbourPos).is(material.getBlock()))
+                continue;
+            for (Direction face : Direction.values()) {
+                if (face.getAxis() == side.getAxis()) continue;
+                VoxelShape edge = getEdge(level, state, pos, side, face);
+                VoxelShape neighbourEdge = getEdge(level, neighbour, neighbourPos, side.getOpposite(), face);
+                if (!Shapes.joinIsNotEmpty(edge, neighbourEdge, BooleanOp.NOT_SAME)) continue;
+                VoxelShape overlap = Shapes.join(edge, neighbourEdge, BooleanOp.AND);
+                if (overlap.isEmpty()) continue;
+                Axis along = remainingAxis(side.getAxis(), face.getAxis());
+                regions.computeIfAbsent(face, f -> new ArrayList<>())
+                        .add(getSeamRegion(side, face, along, overlap.min(along), overlap.max(along)));
+            }
+        }
+        return regions;
+    }
+
+    private static boolean canCompareEdges(BlockState fromState, BlockState toState) {
+        return fromState.getBlock() instanceof ICopycatBlock && toState.getBlock() instanceof ICopycatBlock
+                && !(fromState.getBlock() instanceof IMultiStateCopycatBlock) && !(toState.getBlock() instanceof IMultiStateCopycatBlock);
+    }
+
+    private static VoxelShape getEdge(BlockGetter level, BlockState state, BlockPos pos, Direction side, Direction textureFace) {
+        return Shapes.join(state.getFaceOcclusionShape(level, pos, side), FACE_BANDS[textureFace.ordinal()], BooleanOp.AND);
+    }
+
+    private static Axis remainingAxis(Axis first, Axis second) {
+        for (Axis axis : Axis.values()) {
+            if (axis != first && axis != second) return axis;
+        }
+        throw new IllegalArgumentException("Axes must differ");
+    }
+
+    private static AABB getSeamRegion(Direction side, Direction face, Axis along, double min, double max) {
+        double[] lower = new double[3];
+        double[] upper = new double[3];
+        for (Axis axis : Axis.values()) {
+            int i = axis.ordinal();
+            if (axis == side.getAxis()) {
+                lower[i] = side.getAxisDirection() == Direction.AxisDirection.POSITIVE ? 0.5 : 0;
+                upper[i] = lower[i] + 0.5;
+            } else if (axis == face.getAxis()) {
+                lower[i] = face.getAxisDirection() == Direction.AxisDirection.POSITIVE ? 15 / 16.0 : 0;
+                upper[i] = lower[i] + 1 / 16.0;
+            } else {
+                lower[i] = min;
+                upper[i] = max;
+            }
+        }
+        return new AABB(lower[0], lower[1], lower[2], upper[0], upper[1], upper[2]);
     }
 
     public static VoxelShape getPartialFaceShape(BlockGetter level, BlockState state, String property, Direction face) {

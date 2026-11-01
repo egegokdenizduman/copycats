@@ -1,6 +1,7 @@
 package com.copycatsplus.copycats.foundation.copycat.model.neoforge;
 
 import com.copycatsplus.copycats.CCBlocks;
+import com.copycatsplus.copycats.foundation.copycat.CopycatExternalContext;
 import com.copycatsplus.copycats.foundation.copycat.ICopycatBlock;
 import com.copycatsplus.copycats.foundation.copycat.ICopycatBlockEntity;
 import com.copycatsplus.copycats.foundation.copycat.model.CopycatModelCore;
@@ -9,6 +10,7 @@ import com.copycatsplus.copycats.foundation.copycat.model.ScaledBlockAndTintGett
 import com.copycatsplus.copycats.foundation.copycat.model.assembly.neoforge.CopycatRenderContextNeoForge;
 import com.copycatsplus.copycats.foundation.copycat.multistate.IMultiStateCopycatBlock;
 import com.copycatsplus.copycats.foundation.copycat.multistate.IMultiStateCopycatBlockEntity;
+import com.copycatsplus.copycats.utility.BlockFaceUtils;
 import com.copycatsplus.copycats.utility.neoforge.ModelDataUtils;
 import com.simibubi.create.AllBlocks;
 import com.simibubi.create.content.decoration.copycat.CopycatModel;
@@ -30,6 +32,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.DirectionalBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
 import net.neoforged.neoforge.client.ChunkRenderTypeSet;
 import net.neoforged.neoforge.client.model.QuadTransformers;
 import net.neoforged.neoforge.client.model.data.ModelData;
@@ -53,6 +56,7 @@ public class CopycatModelNeoForge extends BakedModelWrapperWithData {
     private static final ModelProperty<Map<String, ModelData>> WRAPPED_DATA_PROPERTY = new ModelProperty<>();
     private static final ModelProperty<Set<String>> EMISSIVE_PROPERTY = new ModelProperty<>();
     private static final ModelProperty<Integer> VARIANT_PROPERTY = new ModelProperty<>();
+    private static final ModelProperty<PartialEdgeData> PARTIAL_EDGE_PROPERTY = new ModelProperty<>();
 
     private static final ChunkRenderTypeSet allRenderTypes = ChunkRenderTypeSet.of(RenderType.solid(), RenderType.cutout(), RenderType.cutoutMipped(), RenderType.translucent());
 
@@ -196,7 +200,26 @@ public class CopycatModelNeoForge extends BakedModelWrapperWithData {
                             filteredWorld,
                             pos, material, ModelData.EMPTY)
             );
+            PartialEdgeData partialEdges = gatherPartialEdges(world, filteredWorld, pos, state, material);
+            if (partialEdges != null)
+                builder.with(PARTIAL_EDGE_PROPERTY, partialEdges);
             return builder.with(WRAPPED_DATA_PROPERTY, wrappedDataMap);
+        }
+    }
+
+    private @Nullable PartialEdgeData gatherPartialEdges(BlockAndTintGetter world, BlockAndTintGetter filteredWorld, BlockPos pos, BlockState state, BlockState material) {
+        if (!(getModelOf(material) instanceof CTModel))
+            return null;
+        if (world.getBlockEntity(pos) instanceof ICopycatBlockEntity copycatBE && !copycatBE.isCTEnabled())
+            return null;
+        Map<Direction, List<AABB>> regions = BlockFaceUtils.getPartialEdgeRegions(world, pos, state, material);
+        if (regions.isEmpty())
+            return null;
+        CopycatExternalContext.setConnectPartialEdges(true);
+        try {
+            return new PartialEdgeData(getModelOf(material).getModelData(filteredWorld, pos, material, ModelData.EMPTY), regions);
+        } finally {
+            CopycatExternalContext.setConnectPartialEdges(false);
         }
     }
 
@@ -268,19 +291,15 @@ public class CopycatModelNeoForge extends BakedModelWrapperWithData {
                 model = getModelOf(wrappedState);
             }
 
-            List<CopycatRenderContextNeoForge.CopycatBakedQuad> quads = new ArrayList<>();
-            for (Direction side : Iterate.directions) {
-                List<BakedQuad> templateQuads = model.getQuads(wrappedState, side, rand, wrappedData, renderType);
-                for (BakedQuad templateQuad : templateQuads) {
-                    quads.add(new CopycatRenderContextNeoForge.CopycatBakedQuad(templateQuad, side, entry.key()));
-                }
-            }
-            List<BakedQuad> templateQuads = model.getQuads(wrappedState, null, rand, wrappedData, renderType);
-            for (BakedQuad templateQuad : templateQuads) {
-                quads.add(new CopycatRenderContextNeoForge.CopycatBakedQuad(templateQuad, null, entry.key()));
-            }
+            List<CopycatRenderContextNeoForge.CopycatBakedQuad> quads = getTemplateQuads(entry, model, wrappedState, rand, wrappedData, renderType);
 
             List<CopycatRenderContextNeoForge.CopycatBakedQuad> croppedQuads = getCroppedQuads(entry, state, quads, material, data);
+
+            PartialEdgeData partialEdges = data.get(PARTIAL_EDGE_PROPERTY);
+            if (partialEdges != null && entry.type().useCopycatLogic() && barsFacing == null) {
+                List<CopycatRenderContextNeoForge.CopycatBakedQuad> connectedQuads = getTemplateQuads(entry, model, wrappedState, rand, partialEdges.data(), renderType);
+                croppedQuads = PartialEdgeQuads.merge(croppedQuads, getCroppedQuads(entry, state, connectedQuads, material, data), partialEdges.regions());
+            }
 
             CopycatModelNeoForge.OcclusionData occlusionData = occlusionDataMap.get(entry.key());
             for (CopycatRenderContextNeoForge.CopycatBakedQuad croppedQuad : croppedQuads) {
@@ -316,6 +335,19 @@ public class CopycatModelNeoForge extends BakedModelWrapperWithData {
             if (side != quad.cullFace)
                 continue;
             quads.add(quad.toBakedQuad(materials.get(quad.property)));
+        }
+        return quads;
+    }
+
+    private static List<CopycatRenderContextNeoForge.CopycatBakedQuad> getTemplateQuads(CopycatModelCore.ModelEntry entry, BakedModel model, BlockState state, RandomSource rand, ModelData data, RenderType renderType) {
+        List<CopycatRenderContextNeoForge.CopycatBakedQuad> quads = new ArrayList<>();
+        for (Direction side : Iterate.directions) {
+            for (BakedQuad templateQuad : model.getQuads(state, side, rand, data, renderType)) {
+                quads.add(new CopycatRenderContextNeoForge.CopycatBakedQuad(templateQuad, side, entry.key()));
+            }
+        }
+        for (BakedQuad templateQuad : model.getQuads(state, null, rand, data, renderType)) {
+            quads.add(new CopycatRenderContextNeoForge.CopycatBakedQuad(templateQuad, null, entry.key()));
         }
         return quads;
     }
@@ -383,6 +415,12 @@ public class CopycatModelNeoForge extends BakedModelWrapperWithData {
     public static @NotNull Set<String> getEmissive(ModelData data) {
         Set<String> emissive = data == null ? null : data.get(EMISSIVE_PROPERTY);
         return emissive == null ? Set.of() : emissive;
+    }
+
+    /**
+     * The connected texture result with partial edges connected, and where on each face it replaces the normal one.
+     */
+    private record PartialEdgeData(ModelData data, Map<Direction, List<AABB>> regions) {
     }
 
     public static class OcclusionData {
