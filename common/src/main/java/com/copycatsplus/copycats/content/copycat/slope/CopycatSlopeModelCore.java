@@ -19,6 +19,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.function.BiConsumer;
 
 import static com.copycatsplus.copycats.foundation.copycat.model.assembly.CopycatRenderContext.*;
 import static com.copycatsplus.copycats.foundation.copycat.model.assembly.MutableCullFace.*;
@@ -47,6 +48,10 @@ public class CopycatSlopeModelCore extends CopycatModelCore {
                     assembleRampEdge(context, transform, 0);
                 if (enhanced && (context.variant() & CopycatSlopeBlock.RAMP_HIGH) != 0)
                     assembleRampEdge(context, transform, 8);
+                if (enhanced && (context.variant() & CopycatSlopeBlock.RAMP_LOW_JOINT) != 0)
+                    assembleRampJoint(context, transform, true);
+                if (enhanced && (context.variant() & CopycatSlopeBlock.RAMP_HIGH_JOINT) != 0)
+                    assembleRampJoint(context, transform, false);
             }
             case INNER_LEFT, INNER_RIGHT -> assembleCorner(context, transform, true, 0, 16, enhanced);
             case OUTER_LEFT, OUTER_RIGHT -> assembleCorner(context, transform, false, 0, 16, enhanced);
@@ -58,22 +63,49 @@ public class CopycatSlopeModelCore extends CopycatModelCore {
      * meets the next piece of a ramp. At the low edge it reaches past the block, in front of the corner of the block below.
      */
     private static void assembleRampEdge(CopycatRenderContext context, AssemblyTransform transform, double startZ) {
-        final QuadTransform shear = (quad, sprite) -> {
-            for (MutableVertex vertex : quad.vertices) {
-                // the edge is cut square to a 45 degree surface, so it is this much taller than its rows
-                vertex.xyz.y = vertex.xyz.z - (1 - vertex.xyz.y) * Math.sqrt(2);
-                vertex.xyz.x += vertex.xyz.x < 0.5 ? -RAMP_EDGE_OFFSET : RAMP_EDGE_OFFSET;
-            }
-            quad.disableFinalAutoCull = true;
-            return true;
-        };
         context.assemblePiece(
                 transform,
                 vec3(0, 16 - ENHANCED_MARGIN, startZ),
                 aabb(16, ENHANCED_MARGIN, 8).move(0, 16 - ENHANCED_MARGIN, startZ),
                 cull(UP | DOWN | NORTH | SOUTH),
-                shear
+                shearRampEdge((vertex, depth) -> {})
         );
+    }
+
+    /**
+     * Draws half of the edge up to the border it meets where a slope of the other half stands against this one: the
+     * wall past the low tip, or the bottom row past the high tip. The two are mitred, so their rows line up. The rows
+     * at the block's end could be its corner tile, so the piece comes from the middle of the edge and stretches there.
+     */
+    private static void assembleRampJoint(CopycatRenderContext context, AssemblyTransform transform, boolean low) {
+        final double startZ = low ? ENHANCED_MARGIN : 8;
+        final double innerZ = (low ? ENHANCED_MARGIN : 16 - ENHANCED_MARGIN) / 16;
+        final double endZ = low ? 0 : 1;
+        // how far along the block the mitre goes per unit of depth
+        final double slant = low ? 1 : Math.sqrt(2) - 1;
+        context.assemblePiece(
+                transform,
+                vec3(0, 16 - ENHANCED_MARGIN, startZ),
+                aabb(16, ENHANCED_MARGIN, 8 - ENHANCED_MARGIN).move(0, 16 - ENHANCED_MARGIN, startZ),
+                cull(UP | DOWN | NORTH | SOUTH),
+                shearRampEdge((vertex, depth) -> {
+                    if (Math.abs(vertex.xyz.z - innerZ) < DIAGONAL_EPSILON) vertex.xyz.z = endZ + depth * slant;
+                })
+        );
+    }
+
+    private static QuadTransform shearRampEdge(BiConsumer<MutableVertex, Double> place) {
+        return (quad, sprite) -> {
+            for (MutableVertex vertex : quad.vertices) {
+                double depth = 1 - vertex.xyz.y;
+                place.accept(vertex, depth);
+                // the edge is cut square to a 45 degree surface, so it is this much taller than its rows
+                vertex.xyz.y = vertex.xyz.z - depth * Math.sqrt(2);
+                vertex.xyz.x += vertex.xyz.x < 0.5 ? -RAMP_EDGE_OFFSET : RAMP_EDGE_OFFSET;
+            }
+            quad.disableFinalAutoCull = true;
+            return true;
+        };
     }
 
     /**

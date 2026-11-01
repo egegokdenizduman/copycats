@@ -63,6 +63,8 @@ public class CopycatSlopeBlock extends CCWaterloggedCopycatBlock implements ISta
     // model variant flags, for a ramp carrying on past the low or high edge
     public static final int RAMP_LOW = 1;
     public static final int RAMP_HIGH = 2;
+    public static final int RAMP_LOW_JOINT = 4;
+    public static final int RAMP_HIGH_JOINT = 8;
 
     private static final int placementHelperId = PlacementHelpers.register(new PlacementHelper());
 
@@ -117,16 +119,22 @@ public class CopycatSlopeBlock extends CCWaterloggedCopycatBlock implements ISta
     public int getModelVariant(BlockAndTintGetter reader, BlockState state, BlockPos pos) {
         if (state.getValue(SHAPE) != StairsShape.STRAIGHT) return 0;
         Direction facing = state.getValue(FACING);
-        return (isRampContinued(reader, state, pos, facing.getOpposite()) ? RAMP_LOW : 0)
-                | (isRampContinued(reader, state, pos, facing) || isBackedBySlope(reader, state, pos) ? RAMP_HIGH : 0);
+        int variant = 0;
+        if (isRampContinued(reader, state, pos, facing.getOpposite())) variant |= RAMP_LOW;
+        // the slope past the low tip stands on it with its wall, on the side the tip points to
+        else if (isOppositeSlope(reader, state, pos, pos.relative(getSurfaceFace(state).getOpposite()), false)) variant |= RAMP_LOW_JOINT;
+        if (isRampContinued(reader, state, pos, facing)) variant |= RAMP_HIGH;
+        else if (isOppositeSlope(reader, state, pos, pos.relative(facing), false)) variant |= RAMP_HIGH_JOINT;
+        else if (isOppositeSlope(reader, state, pos, pos.relative(facing), true)) variant |= RAMP_HIGH;
+        return variant;
     }
 
-    private static boolean isBackedBySlope(BlockAndTintGetter reader, BlockState state, BlockPos pos) {
-        Direction facing = state.getValue(FACING);
-        BlockPos backPos = pos.relative(facing);
-        BlockState back = reader.getBlockState(backPos);
-        return back.getBlock() instanceof CopycatSlopeBlock && back.getValue(SHAPE) == StairsShape.STRAIGHT && back.getValue(FACING) == facing.getOpposite()
-                && ICopycatBlock.getMaterial(reader, backPos) == ICopycatBlock.getMaterial(reader, pos);
+    private static boolean isOppositeSlope(BlockAndTintGetter reader, BlockState state, BlockPos pos, BlockPos otherPos, boolean sameHalf) {
+        BlockState other = reader.getBlockState(otherPos);
+        return other.getBlock() instanceof CopycatSlopeBlock && other.getValue(SHAPE) == StairsShape.STRAIGHT
+                && other.getValue(FACING) == state.getValue(FACING).getOpposite()
+                && (other.getValue(HALF) == state.getValue(HALF)) == sameHalf
+                && ICopycatBlock.getMaterial(reader, otherPos) == ICopycatBlock.getMaterial(reader, pos);
     }
 
     private boolean isRampContinued(BlockAndTintGetter reader, BlockState state, BlockPos pos, Direction side) {
