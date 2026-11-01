@@ -41,6 +41,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.*;
 import org.jetbrains.annotations.NotNull;
 
+import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.Optional;
 import java.util.function.Predicate;
@@ -52,6 +53,11 @@ public class CopycatSlopeBlock extends CCWaterloggedCopycatBlock implements ISta
     public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
     public static final EnumProperty<Half> HALF = BlockStateProperties.HALF;
     public static final EnumProperty<StairsShape> SHAPE = BlockStateProperties.STAIRS_SHAPE;
+
+    // a slope has almost no wall at its low edge, so this much of the surface counts as that side
+    private static final double LOW_EDGE_DEPTH = 2.0 / 16;
+    private static final double TURN_DEPTH = 4.0 / 16;
+    private static final double ON_FACE = 1e-4;
 
     private static final int placementHelperId = PlacementHelpers.register(new PlacementHelper());
 
@@ -131,6 +137,33 @@ public class CopycatSlopeBlock extends CCWaterloggedCopycatBlock implements ISta
         return StairsShape.STRAIGHT;
     }
 
+    /**
+     * The next piece for a click on a long side of a floor or ceiling slope, null for any other click.
+     * Near a free row end it turns, so that the clicked piece becomes a corner.
+     */
+    @Nullable
+    public static SidePlacement getSidePlacement(Direction facing, Half half, boolean thinLowEdge, BlockPos pos, BlockHitResult ray, Predicate<Direction> isFreeEnd) {
+        Direction side = ray.getDirection();
+        Direction low = facing.getOpposite();
+        Direction surface = half == Half.TOP ? Direction.DOWN : Direction.UP;
+        boolean highClick = side == facing && getDepth(facing, pos, ray) < ON_FACE;
+        boolean lowClick = side == low && getDepth(low, pos, ray) < ON_FACE
+                || thinLowEdge && side == surface && getDepth(low, pos, ray) < LOW_EDGE_DEPTH;
+        if (!highClick && !lowClick) return null;
+        BlockPos newPos = pos.relative(highClick ? facing : low);
+        Direction end = facing.getClockWise();
+        if (getDepth(end, pos, ray) >= TURN_DEPTH) end = end.getOpposite();
+        if (getDepth(end, pos, ray) >= TURN_DEPTH || !isFreeEnd.test(end)) return new SidePlacement(newPos, facing);
+        // the corner shape wants a piece behind that rises to the free end, or one in front that rises away from it
+        return new SidePlacement(newPos, highClick ? end.getOpposite() : end);
+    }
+
+    // how far inside the block the click is, measured from the given side
+    private static double getDepth(Direction side, BlockPos pos, BlockHitResult ray) {
+        double hit = ray.getLocation().get(side.getAxis()) - pos.get(side.getAxis());
+        return side.getAxisDirection() == Direction.AxisDirection.POSITIVE ? 1 - hit : hit;
+    }
+
     private static boolean isSlopeOfSameHalf(BlockState state, BlockState other) {
         return other.getBlock() instanceof CopycatSlopeBlock && other.getValue(HALF) == state.getValue(HALF);
     }
@@ -197,6 +230,9 @@ public class CopycatSlopeBlock extends CCWaterloggedCopycatBlock implements ISta
         };
     }
 
+    public record SidePlacement(BlockPos pos, Direction facing) {
+    }
+
     @MethodsReturnNonnullByDefault
     private static class PlacementHelper extends PoleHelper<Direction> {
 
@@ -212,13 +248,18 @@ public class CopycatSlopeBlock extends CCWaterloggedCopycatBlock implements ISta
 
         @Override
         public PlacementOffset getOffset(Player player, Level world, BlockState state, BlockPos pos, BlockHitResult ray) {
+            SidePlacement side = getSidePlacement(state.getValue(FACING), state.getValue(HALF), true, pos, ray, end -> canTakeShape(state, world, pos, end));
+            if (side != null && world.getBlockState(side.pos()).canBeReplaced())
+                return PlacementOffset.success(side.pos(), s -> getPlacedState(s, state, side.facing(), world, side.pos()));
             PlacementOffset offset = super.getOffset(player, world, state, pos, ray);
             BlockPos newPos = offset.getBlockPos();
-            // the helper places without getStateForPlacement, so the shape is worked out here
-            return offset.withTransform(s -> {
-                BlockState placed = s.setValue(FACING, state.getValue(FACING)).setValue(HALF, state.getValue(HALF));
-                return placed.setValue(SHAPE, getSlopeShape(placed, world, newPos));
-            });
+            return offset.withTransform(s -> getPlacedState(s, state, state.getValue(FACING), world, newPos));
+        }
+
+        // the helper places without getStateForPlacement, so the shape is worked out here
+        private static BlockState getPlacedState(BlockState placed, BlockState clicked, Direction facing, Level world, BlockPos newPos) {
+            placed = placed.setValue(FACING, facing).setValue(HALF, clicked.getValue(HALF));
+            return placed.setValue(SHAPE, getSlopeShape(placed, world, newPos));
         }
 
     }

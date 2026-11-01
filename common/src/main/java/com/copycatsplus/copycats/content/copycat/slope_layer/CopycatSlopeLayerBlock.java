@@ -104,7 +104,7 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
     }
 
     private static ItemInteractionResult usePlacementAssist(ItemStack stack, BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hitResult) {
-        RunPlacement run = getClickedRun(state, level, pos, hitResult, player, stack);
+        RunPlacement run = getClickedPlacement(state, level, pos, hitResult, player, stack);
         // the helper consumes every click, so stacking clicks must skip it
         if (run == null && canStack(state, hitResult.getDirection()))
             return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
@@ -249,7 +249,7 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
             if (side == rise && sameColumn) continue;
             if (side == up && !sameColumn) return null;
             BlockPos nextPos = pos.relative(rise, next.column() - piece.column()).relative(up, next.level() - piece.level());
-            if (level.getBlockState(nextPos).canBeReplaced()) return new RunPlacement(nextPos, next.layers());
+            if (level.getBlockState(nextPos).canBeReplaced()) return new RunPlacement(nextPos, next.layers(), state.getValue(FACING));
             // going down, a wedge may already have its partner below
             if (!sameColumn || side == up) return null;
         }
@@ -267,6 +267,17 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
         if (!noRealSide && Math.abs(depth - (side.getAxisDirection() == Direction.AxisDirection.POSITIVE ? 1 : 0)) > 1e-4) return null;
         RunPlacement run = getRunPlacement(state, level, pos, side);
         return run != null && canAfford(player, held, run.layers()) ? run : null;
+    }
+
+    // the run comes first, then floor and ceiling pieces go beside the clicked one at its own height
+    private static RunPlacement getClickedPlacement(BlockState state, Level level, BlockPos pos, BlockHitResult ray, Player player, ItemStack held) {
+        RunPlacement run = getClickedRun(state, level, pos, ray, player, held);
+        if (run != null || state.getValue(IN_WALL)) return run;
+        int layers = state.getValue(LAYERS);
+        CopycatSlopeBlock.SidePlacement side = CopycatSlopeBlock.getSidePlacement(state.getValue(FACING), state.getValue(HALF), getLowEdge(layers) == 0, pos, ray,
+                end -> getKink(layers) == 0 && canTakeShape(state, level, pos, end));
+        if (side == null || !level.getBlockState(side.pos()).canBeReplaced() || !canAfford(player, held, layers)) return null;
+        return new RunPlacement(side.pos(), layers, side.facing());
     }
 
     private static boolean canAfford(Player player, ItemStack held, int layers) {
@@ -515,7 +526,7 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
     private record RunPiece(int layers, int column, int level) {
     }
 
-    private record RunPlacement(BlockPos pos, int layers) {
+    private record RunPlacement(BlockPos pos, int layers, Direction facing) {
     }
 
     @MethodsReturnNonnullByDefault
@@ -535,9 +546,9 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
         @Override
         public PlacementOffset getOffset(Player player, Level world, BlockState state, BlockPos pos, BlockHitResult ray) {
             ItemStack held = getItemPredicate().test(player.getMainHandItem()) ? player.getMainHandItem() : player.getOffhandItem();
-            RunPlacement run = getClickedRun(state, world, pos, ray, player, held);
+            RunPlacement run = getClickedPlacement(state, world, pos, ray, player, held);
             if (run != null)
-                return PlacementOffset.success(run.pos(), s -> withCornerShape(copyOrientation(s, state).setValue(LAYERS, run.layers()), world, run.pos()));
+                return PlacementOffset.success(run.pos(), s -> withCornerShape(copyOrientation(s, state).setValue(FACING, run.facing()).setValue(LAYERS, run.layers()), world, run.pos()));
             if (canStack(state, ray.getDirection()))
                 return PlacementOffset.fail();
             // one item buys one layer, so LAYERS stays at its default
