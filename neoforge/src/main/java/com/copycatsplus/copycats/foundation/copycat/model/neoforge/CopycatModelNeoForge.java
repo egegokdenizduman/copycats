@@ -280,11 +280,12 @@ public class CopycatModelNeoForge extends BakedModelWrapperWithData {
     @Override
     public @NotNull List<BakedQuad> getQuads(BlockState state, Direction side, @NotNull RandomSource rand, @NotNull ModelData data, RenderType renderType) {
         List<CopycatRenderContextNeoForge.CopycatBakedQuad> templateQuads = renderSession.get().getQuads(state, rand, data, renderType);
+        Map<String, BlockState> materials = getMaterials(data);
         List<BakedQuad> quads = new ArrayList<>();
         for (CopycatRenderContextNeoForge.CopycatBakedQuad quad : templateQuads) {
             if (side != quad.cullFace)
                 continue;
-            quads.add(quad.toBakedQuad());
+            quads.add(quad.toBakedQuad(materials.get(quad.property)));
         }
         return quads;
     }

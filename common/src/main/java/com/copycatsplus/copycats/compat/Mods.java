@@ -33,6 +33,7 @@ public enum Mods {
     FLYWHEEL("flywheel"),
     SODIUM("sodium"),
     RUBIDIUM("rubidium"),
+    IRIS("iris"),
     ATHENA("athena"),
     INDIUM("indium"),
     LITHIUM("lithium"),

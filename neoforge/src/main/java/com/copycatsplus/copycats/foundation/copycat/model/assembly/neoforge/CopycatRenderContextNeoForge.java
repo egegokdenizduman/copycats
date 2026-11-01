@@ -10,6 +10,7 @@ import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.core.Direction;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.ApiStatus;
@@ -130,8 +131,8 @@ public class CopycatRenderContextNeoForge extends CopycatRenderContext.Base<List
             this(quad.getVertices(), quad.getTintIndex(), quad.getDirection(), quad.getSprite(), quad.isShade(), cullFace, property);
         }
 
-        public BakedQuad toBakedQuad() {
-            return new BakedQuad(getVertices(), getTintIndex(), getDirection(), new MultiStateTextureAtlasSprite(property, getSprite()), isShade());
+        public BakedQuad toBakedQuad(@Nullable BlockState material) {
+            return new BakedQuad(getVertices(), getTintIndex(), getDirection(), new MultiStateTextureAtlasSprite(property, material, getSprite()), isShade());
         }
     }
 }
