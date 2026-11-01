@@ -28,6 +28,30 @@ import java.util.Optional;
 public class ConnectedTextureBehaviourMixin {
     @Inject(
             at = @At("HEAD"),
+            method = "testConnection",
+            cancellable = true
+    )
+    private void connectAlongCopycatSurface(BlockAndTintGetter reader, BlockPos currentPos, BlockState connectiveCurrentState, Direction textureSide,
+                                            Direction horizontal, Direction vertical, int sh, int sv, CallbackInfoReturnable<Boolean> cir) {
+        // the filtered reader hides this block when its connected textures are turned off
+        BlockState selfState = reader.getBlockState(currentPos);
+        if (!(selfState.getBlock() instanceof ICustomCTBlocking customBlocking)) return;
+        BlockPos otherPos = currentPos.relative(horizontal, sh).relative(vertical, sv);
+        if (customBlocking.isCTContinued(selfState, currentPos, otherPos, textureSide)) {
+            cir.setReturnValue(true);
+            return;
+        }
+        BlockPos surfacePos = customBlocking.getCTSurfacePos(reader, selfState, currentPos, otherPos, textureSide);
+        if (surfacePos == null) return;
+        BlockState material = ICopycatBlock.getMaterial(reader, surfacePos);
+        if (((ConnectedTextureBehaviour) (Object) this).connectsTo(connectiveCurrentState, material, reader, currentPos, surfacePos, textureSide,
+                sh == 0 ? null : sh == -1 ? horizontal.getOpposite() : horizontal,
+                sv == 0 ? null : sv == -1 ? vertical.getOpposite() : vertical))
+            cir.setReturnValue(true);
+    }
+
+    @Inject(
+            at = @At("HEAD"),
             method = "isBeingBlocked",
             cancellable = true
     )

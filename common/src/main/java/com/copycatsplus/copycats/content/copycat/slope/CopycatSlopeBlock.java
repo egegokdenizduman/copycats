@@ -3,6 +3,7 @@ package com.copycatsplus.copycats.content.copycat.slope;
 import com.copycatsplus.copycats.CCBlocks;
 import com.copycatsplus.copycats.CCShapes;
 import com.copycatsplus.copycats.foundation.copycat.CCWaterloggedCopycatBlock;
+import com.copycatsplus.copycats.foundation.copycat.CopycatExternalContext;
 import com.copycatsplus.copycats.foundation.copycat.ICopycatBlock;
 import com.copycatsplus.copycats.foundation.copycat.ICustomCTBlocking;
 import com.copycatsplus.copycats.foundation.copycat.IStateType;
@@ -89,14 +90,94 @@ public class CopycatSlopeBlock extends CCWaterloggedCopycatBlock implements ISta
     }
 
     private static boolean isBehindHighEdge(BlockState state, BlockPos pos, BlockPos connectingPos, Direction face) {
-        if (face != (state.getValue(HALF) == Half.TOP ? Direction.DOWN : Direction.UP)) return false;
+        if (face != getSurfaceFace(state)) return false;
+        BlockPos offset = connectingPos.subtract(pos);
+        Direction side = Direction.fromDelta(offset.getX(), offset.getY(), offset.getZ());
+        return side != null && isHighEdge(state, side);
+    }
+
+    @Override
+    public boolean isCTContinued(BlockState state, BlockPos pos, BlockPos otherPos, Direction face) {
+        // a side face narrows to nothing at the low edge, where a border would only show as a stray notch
+        if (face.getAxis().isVertical() || isHighEdge(state, face) || isLowEdge(state, face)) return false;
+        Direction rising = getRisingDirection(state, face);
+        return rising != null && otherPos.subtract(pos).get(rising.getAxis()) == -rising.getAxisDirection().getStep();
+    }
+
+    @Nullable
+    @Override
+    public BlockPos getCTSurfacePos(BlockAndTintGetter reader, BlockState state, BlockPos pos, BlockPos otherPos, Direction face) {
+        if (face != getSurfaceFace(state)) return null;
+        BlockPos offset = otherPos.subtract(pos);
+        int step = getSurfaceStep(state, offset.getX(), offset.getZ());
+        if (step == 0) return null;
+        BlockPos surfacePos = otherPos.relative(face, step);
+        BlockState surface = reader.getBlockState(surfacePos);
+        if (isSlopeOfSameHalf(state, surface) && getSurfaceStep(surface, -offset.getX(), -offset.getZ()) == -step)
+            return surfacePos;
+        // the two arms of a corner sit level with each other, either side of the crease
+        BlockState other = reader.getBlockState(otherPos);
+        boolean diagonal = offset.getX() != 0 && offset.getZ() != 0;
+        return diagonal && isSlopeOfSameHalf(state, other) && getSurfaceStep(other, -offset.getX(), -offset.getZ()) == step ? otherPos : null;
+    }
+
+    @Override
+    public boolean isIgnoredConnectivitySide(BlockAndTintGetter reader, BlockState fromState, Direction face, BlockPos fromPos, @Nullable BlockPos toPos, @Nullable BlockState toState) {
+        // there is no wall at the low edge for a neighbour's face to run into
+        if (!CopycatExternalContext.isForBlockingLogic() && isLowEdge(fromState, face)) return true;
+        return super.isIgnoredConnectivitySide(reader, fromState, face, fromPos, toPos, toState);
+    }
+
+    private static Direction getSurfaceFace(BlockState state) {
+        return state.getValue(HALF) == Half.TOP ? Direction.DOWN : Direction.UP;
+    }
+
+    private static boolean isHighEdge(BlockState state, Direction side) {
         Direction facing = state.getValue(FACING);
         return switch (state.getValue(SHAPE)) {
-            case STRAIGHT -> connectingPos.equals(pos.relative(facing));
-            case INNER_LEFT -> connectingPos.equals(pos.relative(facing)) || connectingPos.equals(pos.relative(facing.getCounterClockWise()));
-            case INNER_RIGHT -> connectingPos.equals(pos.relative(facing)) || connectingPos.equals(pos.relative(facing.getClockWise()));
+            case STRAIGHT -> side == facing;
+            case INNER_LEFT -> side == facing || side == facing.getCounterClockWise();
+            case INNER_RIGHT -> side == facing || side == facing.getClockWise();
             case OUTER_LEFT, OUTER_RIGHT -> false;
         };
+    }
+
+    private static boolean isLowEdge(BlockState state, Direction side) {
+        Direction facing = state.getValue(FACING);
+        return switch (state.getValue(SHAPE)) {
+            case STRAIGHT -> side == facing.getOpposite();
+            case INNER_LEFT, INNER_RIGHT -> false;
+            case OUTER_LEFT -> side == facing.getOpposite() || side == facing.getClockWise();
+            case OUTER_RIGHT -> side == facing.getOpposite() || side == facing.getCounterClockWise();
+        };
+    }
+
+    // the direction a side face climbs in, as seen on that face
+    @Nullable
+    private static Direction getRisingDirection(BlockState state, Direction face) {
+        Direction facing = state.getValue(FACING);
+        if (facing.getAxis() != face.getAxis()) return facing;
+        return switch (state.getValue(SHAPE)) {
+            case STRAIGHT -> null;
+            case INNER_LEFT, OUTER_LEFT -> facing.getCounterClockWise();
+            case INNER_RIGHT, OUTER_RIGHT -> facing.getClockWise();
+        };
+    }
+
+    /**
+     * How many blocks along the surface face the surface has moved at this horizontal offset, where a ramp carries on
+     * diagonally. 0 when it stays level there.
+     */
+    private static int getSurfaceStep(BlockState state, int x, int z) {
+        Direction xSide = x == 0 ? null : x > 0 ? Direction.EAST : Direction.WEST;
+        Direction zSide = z == 0 ? null : z > 0 ? Direction.SOUTH : Direction.NORTH;
+        if (xSide != null && isHighEdge(state, xSide) || zSide != null && isHighEdge(state, zSide)) return 1;
+        if (xSide != null && isLowEdge(state, xSide) || zSide != null && isLowEdge(state, zSide)) return -1;
+        if (xSide == null || zSide == null) return 0;
+        // straight along the crease of a corner
+        if (isHighEdge(state, xSide.getOpposite()) && isHighEdge(state, zSide.getOpposite())) return -1;
+        if (isLowEdge(state, xSide.getOpposite()) && isLowEdge(state, zSide.getOpposite())) return 1;
+        return 0;
     }
 
     @SuppressWarnings("deprecation")

@@ -6,6 +6,8 @@ import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.Block;
 
+import org.jetbrains.annotations.Nullable;
+
 import java.util.Optional;
 
 /**
@@ -52,5 +54,34 @@ public interface ICustomCTBlocking {
      */
     default Optional<Boolean> isCTBlocked(BlockAndTintGetter reader, BlockState state, BlockPos pos, BlockPos connectingPos, BlockPos blockingPos, Direction face) {
         return Optional.empty();
+    }
+
+    /**
+     * Determine whether a face of this block shows no border towards a position, whatever is there.
+     *
+     * @param state    The state of this block, which is trying to render connected textures.
+     * @param pos      The position of this block.
+     * @param otherPos The position that this block is trying to connect to.
+     * @param face     The block face that this block is trying to render.
+     * @return Whether the face is treated as connected.
+     */
+    default boolean isCTContinued(BlockState state, BlockPos pos, BlockPos otherPos, Direction face) {
+        return false;
+    }
+
+    /**
+     * Find the block that really continues this block's face in the direction of a position, for faces that do not
+     * lie in the plane of the block grid, such as a ramp of slopes.
+     *
+     * @param reader   The world.
+     * @param state    The state of this block, which is trying to render connected textures.
+     * @param pos      The position of this block.
+     * @param otherPos The position that this block would normally connect to.
+     * @param face     The block face that this block is trying to render.
+     * @return The position to connect to if it can, or null to only use default logic.
+     */
+    @Nullable
+    default BlockPos getCTSurfacePos(BlockAndTintGetter reader, BlockState state, BlockPos pos, BlockPos otherPos, Direction face) {
+        return null;
     }
 }
