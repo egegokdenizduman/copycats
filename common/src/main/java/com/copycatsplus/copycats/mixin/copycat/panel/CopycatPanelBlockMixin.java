@@ -78,7 +78,7 @@ public abstract class CopycatPanelBlockMixin extends WaterloggedCopycatBlock imp
             cir.setReturnValue(true);
             return;
         }
-        cir.setReturnValue(!checkConnection(reader, toPos, fromPos, reader.getBlockState(toPos)));
+        cir.setReturnValue(!checkConnection(reader, toPos, fromPos, reader.getBlockState(toPos), face));
     }
 
     @Inject(

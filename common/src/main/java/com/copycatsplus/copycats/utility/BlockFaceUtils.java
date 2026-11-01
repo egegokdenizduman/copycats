@@ -1,6 +1,7 @@
 package com.copycatsplus.copycats.utility;
 
 import com.copycatsplus.copycats.foundation.copycat.CopycatExternalContext;
+import com.copycatsplus.copycats.foundation.copycat.ICopycatBlock;
 import com.copycatsplus.copycats.foundation.copycat.model.ScaledBlockAndTintGetter;
 import com.copycatsplus.copycats.foundation.copycat.multistate.IMultiStateCopycatBlock;
 import com.copycatsplus.copycats.mixin.copycat.VoxelShapeAccessor;
@@ -26,6 +27,16 @@ import static com.copycatsplus.copycats.utility.MathUtils.*;
 public class BlockFaceUtils {
 
     private static final ThreadLocal<Map<BiFunction<VoxelShape, VoxelShape, Boolean>, Object2ByteLinkedOpenHashMap<ShapeKey>>> SHAPE_OP_CACHE = ThreadLocal.withInitial(HashMap::new);
+
+    // the outermost pixel of the block on each side, indexed by direction
+    private static final VoxelShape[] FACE_BANDS = {
+            Shapes.box(0, 0, 0, 1, 1 / 16.0, 1),
+            Shapes.box(0, 15 / 16.0, 0, 1, 1, 1),
+            Shapes.box(0, 0, 0, 1, 1, 1 / 16.0),
+            Shapes.box(0, 0, 15 / 16.0, 1, 1, 1),
+            Shapes.box(0, 0, 0, 1 / 16.0, 1, 1),
+            Shapes.box(15 / 16.0, 0, 0, 1, 1, 1)
+    };
 
     public static record ShapeKey(VoxelShape fromShape, VoxelShape toShape) {
     }
@@ -174,6 +185,27 @@ public class BlockFaceUtils {
                 toPos,
                 fromFace,
                 (from, to) -> !Shapes.joinIsNotEmpty(from, to, BooleanOp.NOT_SAME));
+    }
+
+    /**
+     * Whether a textured face lies flush across two adjacent copycats, meeting along the same edge even if the rest of
+     * their touching faces differ. Multi-state copycats are skipped because their parts render separately.
+     */
+    public static boolean edgeMatch(BlockGetter level,
+                                    BlockState fromState,
+                                    BlockPos fromPos,
+                                    BlockState toState,
+                                    BlockPos toPos,
+                                    Direction fromFace,
+                                    Direction textureFace) {
+        if (textureFace.getAxis() == fromFace.getAxis()) return false;
+        if (!(fromState.getBlock() instanceof ICopycatBlock) || !(toState.getBlock() instanceof ICopycatBlock)) return false;
+        if (fromState.getBlock() instanceof IMultiStateCopycatBlock || toState.getBlock() instanceof IMultiStateCopycatBlock) return false;
+        VoxelShape band = FACE_BANDS[textureFace.ordinal()];
+        VoxelShape fromEdge = Shapes.join(fromState.getFaceOcclusionShape(level, fromPos, fromFace), band, BooleanOp.AND);
+        if (fromEdge.isEmpty()) return false;
+        VoxelShape toEdge = Shapes.join(toState.getFaceOcclusionShape(level, toPos, fromFace.getOpposite()), band, BooleanOp.AND);
+        return !Shapes.joinIsNotEmpty(fromEdge, toEdge, BooleanOp.NOT_SAME);
     }
 
     public static VoxelShape getPartialFaceShape(BlockGetter level, BlockState state, String property, Direction face) {

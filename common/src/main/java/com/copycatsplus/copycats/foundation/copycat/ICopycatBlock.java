@@ -508,7 +508,7 @@ public interface ICopycatBlock extends IWrenchable, IStateType, TransformableBlo
 
         // we are swapping to and from states because we want to consider from the perspective of the block that is trying
         // to display connected textures
-        return !checkConnection(reader, toPos, fromPos, toState);
+        return !checkConnection(reader, toPos, fromPos, toState, face);
     }
 
     /**
@@ -534,6 +534,15 @@ public interface ICopycatBlock extends IWrenchable, IStateType, TransformableBlo
 
     default boolean checkConnection(BlockAndTintGetter reader, BlockPos fromPos, BlockPos toPos,
                                     BlockState fromState) {
+        return checkConnection(reader, fromPos, toPos, fromState, null);
+    }
+
+    /**
+     * @param textureFace The face being rendered, if known. It connects when it lies flush across both blocks, even if
+     *                    their touching faces differ.
+     */
+    default boolean checkConnection(BlockAndTintGetter reader, BlockPos fromPos, BlockPos toPos,
+                                    BlockState fromState, @Nullable Direction textureFace) {
         Vec3i diff = toPos.subtract(fromPos);
 
         if (diff.equals(Vec3i.ZERO))
@@ -544,7 +553,8 @@ public interface ICopycatBlock extends IWrenchable, IStateType, TransformableBlo
         BlockState toState = reader.getBlockState(toPos);
 
         if (facing != null) {
-            return BlockFaceUtils.faceMatch(reader, fromState, fromPos, toState, toPos, facing);
+            return BlockFaceUtils.faceMatch(reader, fromState, fromPos, toState, toPos, facing)
+                    || textureFace != null && BlockFaceUtils.edgeMatch(reader, fromState, fromPos, toState, toPos, facing, textureFace);
         } else if (diff.getX() != 0 && diff.getY() != 0 && diff.getZ() != 0) {
             // three axes offsets only happens when checking for CT blocking
             return true;
@@ -562,7 +572,8 @@ public interface ICopycatBlock extends IWrenchable, IStateType, TransformableBlo
                     BlockState midState = reader.getBlockState(midPos);
                     Vec3i remainingDiff = diff.subtract(axisDiff);
                     Direction remainingFacing = Direction.fromDelta(remainingDiff.getX(), remainingDiff.getY(), remainingDiff.getZ());
-                    if (!BlockFaceUtils.faceMatch(reader, midState, midPos, toState, toPos, remainingFacing))
+                    if (!BlockFaceUtils.faceMatch(reader, midState, midPos, toState, toPos, remainingFacing)
+                            && (textureFace == null || !BlockFaceUtils.edgeMatch(reader, midState, midPos, toState, toPos, remainingFacing, textureFace)))
                         return false;
                 }
             }

@@ -88,7 +88,7 @@ public abstract class CopycatStepBlockMixin extends WaterloggedCopycatBlock impl
             return true;
         }
 
-        return !checkConnection(reader, toPos, fromPos, reader.getBlockState(toPos));
+        return !checkConnection(reader, toPos, fromPos, reader.getBlockState(toPos), face);
     }
 
     @Override
