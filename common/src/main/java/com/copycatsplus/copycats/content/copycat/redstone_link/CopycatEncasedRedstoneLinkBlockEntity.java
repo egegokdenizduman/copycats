@@ -1,9 +1,13 @@
 package com.copycatsplus.copycats.content.copycat.redstone_link;
 
 import com.copycatsplus.copycats.foundation.copycat.ICopycatBlockEntity;
+import com.simibubi.create.AllSoundEvents;
+import com.simibubi.create.content.redstone.link.LinkBehaviour;
 import com.simibubi.create.content.redstone.link.RedstoneLinkBlock;
 import com.simibubi.create.content.redstone.link.RedstoneLinkBlockEntity;
 import com.simibubi.create.content.schematics.requirement.ItemRequirement;
+import com.simibubi.create.foundation.blockEntity.behaviour.BehaviourType;
+import com.simibubi.create.foundation.blockEntity.behaviour.BlockEntityBehaviour;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -17,10 +21,23 @@ public class CopycatEncasedRedstoneLinkBlockEntity extends RedstoneLinkBlockEnti
     protected ItemStack consumedItem;
     protected boolean enableCT;
     private boolean signalChanged;
+    private boolean frequencySlotsVisible;
 
     public CopycatEncasedRedstoneLinkBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
         super(type, pos, state);
         ICopycatBlockEntity.super.init();
+    }
+
+    public void toggleFrequencySlots() {
+        frequencySlotsVisible = !frequencySlotsVisible;
+        notifyUpdate();
+        AllSoundEvents.WRENCH_ROTATE.playOnServer(level, worldPosition, 1, frequencySlotsVisible ? 1.25f : .75f);
+    }
+
+    // Create draws and clicks the slots through this lookup, while the link network keeps its own reference
+    @Override
+    public <T extends BlockEntityBehaviour> T getBehaviour(BehaviourType<T> type) {
+        return type == LinkBehaviour.TYPE && !frequencySlotsVisible ? null : super.getBehaviour(type);
     }
 
     @Override
@@ -93,17 +110,20 @@ public class CopycatEncasedRedstoneLinkBlockEntity extends RedstoneLinkBlockEnti
     public void read(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
         super.read(tag, registries, clientPacket);
         ICopycatBlockEntity.read(this, tag, registries, clientPacket);
+        frequencySlotsVisible = tag.getBoolean("FrequencySlotsVisible");
     }
 
     @Override
     public void writeSafe(CompoundTag tag, HolderLookup.Provider registries) {
         super.writeSafe(tag, registries);
         ICopycatBlockEntity.writeSafe(this, tag, registries);
+        tag.putBoolean("FrequencySlotsVisible", frequencySlotsVisible);
     }
 
     @Override
     public void write(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
         super.write(tag, registries, clientPacket);
         ICopycatBlockEntity.write(this, tag, registries, clientPacket);
+        tag.putBoolean("FrequencySlotsVisible", frequencySlotsVisible);
     }
 }

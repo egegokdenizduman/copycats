@@ -14,7 +14,8 @@ import java.util.Locale;
 public enum CCPackets implements BasePacketPayload.PacketTypeProvider {
     CONFIG_SYNC(ConfigSyncPacket.class, ConfigSyncPacket.STREAM_CODEC),
     FILL_COPYCAT(FillCopycatPacket.class, FillCopycatPacket.STREAM_CODEC),
-    SWAP_SHAPE_VARIANT(SwapShapeVariantPacket.class, SwapShapeVariantPacket.STREAM_CODEC)
+    SWAP_SHAPE_VARIANT(SwapShapeVariantPacket.class, SwapShapeVariantPacket.STREAM_CODEC),
+    TOGGLE_LINK_FREQUENCY_SLOTS(ToggleLinkFrequencySlotsPacket.class, ToggleLinkFrequencySlotsPacket.STREAM_CODEC)
     ;
 /*    //TODO: Increase version on updates
     public static final PacketSystem;PACKETS = PacketSystem.builder(Copycats.MODID, 2)

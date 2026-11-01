@@ -2,6 +2,7 @@ package com.copycatsplus.copycats.neoforge;
 
 import com.copycatsplus.copycats.Copycats;
 import com.copycatsplus.copycats.CopycatsClient;
+import com.copycatsplus.copycats.content.copycat.redstone_link.neoforge.EncasedLinkAttackHandler;
 import com.copycatsplus.copycats.foundation.copycat.model.kinetic.RendererReloadCache;
 import com.copycatsplus.copycats.foundation.shape_variant.ShapeVariantMenu;
 import dev.engine_room.flywheel.api.event.ReloadLevelRendererEvent;
@@ -19,5 +20,6 @@ public class CopycatsClientImpl {
         CopycatsClient.init();
         NeoForge.EVENT_BUS.<ReloadLevelRendererEvent>addListener(RendererReloadCache::onReloadLevelRenderer);
         NeoForge.EVENT_BUS.<InputEvent.Key>addListener(event -> ShapeVariantMenu.onKeyInput(event.getKey(), event.getScanCode(), event.getAction()));
+        NeoForge.EVENT_BUS.addListener(EncasedLinkAttackHandler::onInteraction);
     }
 }
