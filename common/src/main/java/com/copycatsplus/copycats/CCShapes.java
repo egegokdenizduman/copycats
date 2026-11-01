@@ -275,33 +275,100 @@ public class CCShapes {
                     layer -> SLOPE_LAYER.get(Direction.SOUTH).get(Half.BOTTOM).get(false).get(layer).copy()
                             .rotateZ(-90).flipX(half == Half.TOP)
             )));
+    public static final Map<Direction, Map<Half, Map<StairsShape, Map<Integer, MutableShape>>>> SLOPE_LAYER_CORNER =
+            forHorizontalDirections(forHalves(forAll(STAIRS_SHAPE, CopycatSlopeLayerBlock.LAYERS,
+                    (slopeShape, layer) -> {
+                        double low = 4 * CopycatSlopeLayerBlock.getLowEdge(layer);
+                        double high = 4 * CopycatSlopeLayerBlock.getHighEdge(layer);
+                        return switch (slopeShape) {
+                            // only corners are looked up here
+                            case STRAIGHT -> shape();
+                            case INNER_LEFT, INNER_RIGHT -> innerSlopeCorner(low, high).flipX(slopeShape == StairsShape.INNER_RIGHT);
+                            case OUTER_LEFT, OUTER_RIGHT -> outerSlopeCorner(low, high).flipX(slopeShape == StairsShape.OUTER_RIGHT);
+                        };
+                    }
+            )));
     // Entity.collide takes the lowest step that helps, so one tick crosses only one riser.
     // Floor slopes walk on half block treads, wider than a sprint tick, like vanilla stairs.
     public static final Map<Direction, Map<StairsShape, MutableShape>> SLOPE_COLLISION =
             forHorizontalDirections(forAll(STAIRS_SHAPE,
-                    slopeShape -> switch (slopeShape) {
-                        case STRAIGHT -> slopeTreads(0, 16);
-                        case INNER_LEFT, INNER_RIGHT -> shape(
-                                aabb(16, 8, 16),
-                                aabb(16, 8, 8).move(0, 8, 8),
-                                aabb(8, 8, 8).move(8, 8, 0)
-                        ).flipX(slopeShape == StairsShape.INNER_RIGHT);
-                        case OUTER_LEFT, OUTER_RIGHT -> shape(
-                                aabb(16, 8, 16),
-                                aabb(8, 8, 8).move(8, 8, 8)
-                        ).flipX(slopeShape == StairsShape.OUTER_RIGHT);
-                    }
+                    slopeShape -> slopeTreads(slopeShape, 0, 16)
             ));
-    public static final Map<Direction, Map<Integer, MutableShape>> SLOPE_LAYER_COLLISION =
-            forHorizontalDirections(forAll(CopycatSlopeLayerBlock.LAYERS,
-                    layer -> slopeTreads(4 * CopycatSlopeLayerBlock.getLowEdge(layer), 4 * CopycatSlopeLayerBlock.getHighEdge(layer))
+    public static final Map<Direction, Map<StairsShape, Map<Integer, MutableShape>>> SLOPE_LAYER_COLLISION =
+            forHorizontalDirections(forAll(STAIRS_SHAPE, CopycatSlopeLayerBlock.LAYERS,
+                    (slopeShape, layer) -> slopeTreads(slopeShape, 4 * CopycatSlopeLayerBlock.getLowEdge(layer), 4 * CopycatSlopeLayerBlock.getHighEdge(layer))
             ));
 
-    private static MutableShape slopeTreads(double low, double high) {
-        return shape(
-                aabb(16, (low + high) / 2, 8),
-                aabb(16, high, 8).move(0, 0, 8)
+    private static MutableShape slopeTreads(StairsShape slopeShape, double low, double high) {
+        double middle = (low + high) / 2;
+        return switch (slopeShape) {
+            case STRAIGHT -> shape(
+                    aabb(16, middle, 8),
+                    aabb(16, high, 8).move(0, 0, 8)
+            );
+            case INNER_LEFT, INNER_RIGHT -> shape(
+                    aabb(16, middle, 16),
+                    aabb(16, high, 8).move(0, 0, 8),
+                    aabb(8, high, 8).move(8, 0, 0)
+            ).flipX(slopeShape == StairsShape.INNER_RIGHT);
+            case OUTER_LEFT, OUTER_RIGHT -> shape(
+                    aabb(16, middle, 16),
+                    aabb(8, high, 8).move(8, 0, 8)
+            ).flipX(slopeShape == StairsShape.OUTER_RIGHT);
+        };
+    }
+
+    // two straight slope layers joined, rising to the south and east
+    private static MutableShape innerSlopeCorner(double low, double high) {
+        double step = (high - low) / SLOPE_SUBDIVISIONS;
+        MutableShape corner = shape(
+                IntStream.range(0, SLOPE_SUBDIVISIONS).boxed()
+                        .flatMap(i -> Stream.of(
+                                aabb(16, low + (i + 1) * step, 16 - i * SLOPE_STEP).move(0, 0, i * SLOPE_STEP),
+                                aabb(16 - i * SLOPE_STEP, low + (i + 1) * step, 16).move(i * SLOPE_STEP, 0, 0)
+                        ))
+                        .toArray(MutableAABB[]::new)
+        ).outline(
+                line(vec3(0, 0, 0), vec3(16, 0, 0)),
+                line(vec3(0, 0, 16), vec3(16, 0, 16)),
+                line(vec3(0, 0, 0), vec3(0, 0, 16)),
+                line(vec3(16, 0, 0), vec3(16, 0, 16)),
+                line(vec3(16, 0, 0), vec3(16, high, 0)),
+                line(vec3(0, 0, 16), vec3(0, high, 16)),
+                line(vec3(16, 0, 16), vec3(16, high, 16)),
+                line(vec3(16, high, 0), vec3(16, high, 16)),
+                line(vec3(0, high, 16), vec3(16, high, 16)),
+                line(vec3(0, low, 0), vec3(16, high, 0)),
+                line(vec3(0, low, 0), vec3(0, high, 16)),
+                line(vec3(0, low, 0), vec3(16, high, 16))
         );
+        return low > 0 ? corner.outline(line(vec3(0, 0, 0), vec3(0, low, 0))) : corner;
+    }
+
+    // the overlap of those two slope layers, peaking at the south-east corner
+    private static MutableShape outerSlopeCorner(double low, double high) {
+        double step = (high - low) / SLOPE_SUBDIVISIONS;
+        MutableShape corner = shape(
+                IntStream.range(0, SLOPE_SUBDIVISIONS)
+                        .mapToObj(i -> aabb(16 - i * SLOPE_STEP, low + (i + 1) * step, 16 - i * SLOPE_STEP).move(i * SLOPE_STEP, 0, i * SLOPE_STEP))
+                        .toArray(MutableAABB[]::new)
+        ).outline(
+                line(vec3(0, 0, 0), vec3(16, 0, 0)),
+                line(vec3(0, 0, 16), vec3(16, 0, 16)),
+                line(vec3(0, 0, 0), vec3(0, 0, 16)),
+                line(vec3(16, 0, 0), vec3(16, 0, 16)),
+                line(vec3(16, 0, 16), vec3(16, high, 16)),
+                line(vec3(0, low, 16), vec3(16, high, 16)),
+                line(vec3(16, low, 0), vec3(16, high, 16)),
+                line(vec3(0, low, 0), vec3(16, high, 16))
+        );
+        return low > 0 ? corner.outline(
+                line(vec3(0, 0, 0), vec3(0, low, 0)),
+                line(vec3(16, 0, 0), vec3(16, low, 0)),
+                line(vec3(0, 0, 16), vec3(0, low, 16)),
+                line(vec3(0, low, 0), vec3(16, low, 0)),
+                line(vec3(0, low, 0), vec3(0, low, 16))
+        ) : corner;
     }
 
     public static AssemblyTransform halves(Half half) {

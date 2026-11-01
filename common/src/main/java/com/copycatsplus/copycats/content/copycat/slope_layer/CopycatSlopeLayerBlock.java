@@ -3,6 +3,7 @@ package com.copycatsplus.copycats.content.copycat.slope_layer;
 import com.copycatsplus.copycats.CCBlocks;
 import com.copycatsplus.copycats.CCShapes;
 import com.copycatsplus.copycats.Copycats;
+import com.copycatsplus.copycats.content.copycat.slope.CopycatSlopeBlock;
 import com.copycatsplus.copycats.foundation.copycat.CCWaterloggedCopycatBlock;
 import com.copycatsplus.copycats.foundation.copycat.ICopycatBlock;
 import com.copycatsplus.copycats.foundation.copycat.IStateType;
@@ -31,7 +32,10 @@ import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Mirror;
+import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
@@ -60,6 +64,7 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
     public static final IntegerProperty LAYERS = IntegerProperty.create("layers", 1, 10);
     // with IN_WALL: the ridge runs along Y, FACING is the high edge and HALF picks the wall beside it
     public static final BooleanProperty VERTICAL = BooleanProperty.create("vertical");
+    public static final EnumProperty<StairsShape> SHAPE = BlockStateProperties.STAIRS_SHAPE;
 
     private static final String VERTICAL_ITEM_TAG = "VerticalSlopeLayer";
 
@@ -76,12 +81,13 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
                 .setValue(IN_WALL, false)
                 .setValue(VERTICAL, false)
                 .setValue(LAYERS, 1)
+                .setValue(SHAPE, StairsShape.STRAIGHT)
         );
     }
 
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> pBuilder) {
-        super.createBlockStateDefinition(pBuilder.add(FACING, HALF, IN_WALL, VERTICAL, LAYERS));
+        super.createBlockStateDefinition(pBuilder.add(FACING, HALF, IN_WALL, VERTICAL, LAYERS, SHAPE));
     }
 
     @Override
@@ -113,16 +119,66 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
         BlockState state = context.getLevel().getBlockState(blockPos);
         if (state.is(this)) {
             if (state.getValue(LAYERS) < 8)
-                return state.cycle(LAYERS);
+                return withCornerShape(state.cycle(LAYERS), context.getLevel(), blockPos);
             else {
                 Copycats.LOGGER.warn("Can't figure out where to place a slope layer! Please file an issue if you see this.");
                 return state;
             }
         } else if (isVerticalItem(context.getItemInHand())) {
-            return continueShallowRun(getVerticalStateForPlacement(stateForPlacement, context), context);
+            return withCornerShape(continueShallowRun(getVerticalStateForPlacement(stateForPlacement, context), context), context.getLevel(), blockPos);
         } else {
-            return continueShallowRun(getRegularStateForPlacement(stateForPlacement, context), context);
+            return withCornerShape(continueShallowRun(getRegularStateForPlacement(stateForPlacement, context), context), context.getLevel(), blockPos);
         }
+    }
+
+    @Override
+    public BlockState updateShape(BlockState pState, Direction pDirection, BlockState pNeighborState,
+                                  LevelAccessor pLevel, BlockPos pCurrentPos, BlockPos pNeighborPos) {
+        BlockState state = super.updateShape(pState, pDirection, pNeighborState, pLevel, pCurrentPos, pNeighborPos);
+        return pDirection.getAxis().isHorizontal() ? withCornerShape(state, pLevel, pCurrentPos) : state;
+    }
+
+    private static BlockState withCornerShape(BlockState state, BlockGetter level, BlockPos pos) {
+        return state.setValue(SHAPE, getCornerShape(state, level, pos));
+    }
+
+    /**
+     * Same rules as {@link CopycatSlopeBlock}, only connecting to floor or ceiling pieces whose surfaces meet.
+     */
+    private static StairsShape getCornerShape(BlockState state, BlockGetter level, BlockPos pos) {
+        if (state.getValue(IN_WALL) || state.getValue(LAYERS) == 8) return StairsShape.STRAIGHT;
+        Direction facing = state.getValue(FACING);
+        BlockState front = level.getBlockState(pos.relative(facing));
+        if (connectsTo(state, front)) {
+            Direction frontFacing = front.getValue(FACING);
+            if (frontFacing.getAxis() != facing.getAxis() && canTakeShape(state, level, pos, frontFacing.getOpposite())) {
+                return frontFacing == facing.getCounterClockWise() ? StairsShape.OUTER_LEFT : StairsShape.OUTER_RIGHT;
+            }
+        }
+        BlockState back = level.getBlockState(pos.relative(facing.getOpposite()));
+        if (connectsTo(state, back)) {
+            Direction backFacing = back.getValue(FACING);
+            if (backFacing.getAxis() != facing.getAxis() && canTakeShape(state, level, pos, backFacing)) {
+                return backFacing == facing.getCounterClockWise() ? StairsShape.INNER_LEFT : StairsShape.INNER_RIGHT;
+            }
+        }
+        return StairsShape.STRAIGHT;
+    }
+
+    private static boolean connectsTo(BlockState state, BlockState other) {
+        return other.getBlock() instanceof CopycatSlopeLayerBlock
+                && !other.getValue(IN_WALL)
+                && other.getValue(HALF) == state.getValue(HALF)
+                && other.getValue(LAYERS).equals(state.getValue(LAYERS));
+    }
+
+    private static boolean canTakeShape(BlockState state, BlockGetter level, BlockPos pos, Direction side) {
+        BlockState other = level.getBlockState(pos.relative(side));
+        return !connectsTo(state, other) || other.getValue(FACING) != state.getValue(FACING);
+    }
+
+    public static boolean isCorner(BlockState state) {
+        return !state.getValue(IN_WALL) && state.getValue(SHAPE) != StairsShape.STRAIGHT;
     }
 
     private static BlockState getRegularStateForPlacement(BlockState state, BlockPlaceContext context) {
@@ -239,10 +295,10 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
                     .setValue(FACING, rise)
                     .setValue(HALF, base == Direction.UP ? Half.TOP : Half.BOTTOM);
         if (rise.getAxis().isVertical())
-            return state.setValue(IN_WALL, true).setValue(VERTICAL, false)
+            return state.setValue(IN_WALL, true).setValue(VERTICAL, false).setValue(SHAPE, StairsShape.STRAIGHT)
                     .setValue(FACING, base.getOpposite())
                     .setValue(HALF, rise == Direction.UP ? Half.TOP : Half.BOTTOM);
-        return state.setValue(IN_WALL, true).setValue(VERTICAL, true)
+        return state.setValue(IN_WALL, true).setValue(VERTICAL, true).setValue(SHAPE, StairsShape.STRAIGHT)
                 .setValue(FACING, rise)
                 .setValue(HALF, base == rise.getClockWise() ? Half.TOP : Half.BOTTOM);
     }
@@ -257,7 +313,13 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
 
     private static boolean canStack(BlockState state, Direction clickedFace) {
         if (state.getValue(LAYERS) >= 8) return false;
-        return clickedFace == getBase(state).getOpposite() || clickedFace == getRise(state).getOpposite();
+        if (clickedFace == getBase(state).getOpposite() || clickedFace == getRise(state).getOpposite()) return true;
+        if (!isCorner(state)) return false;
+        // a corner's second arm rises to one side, its surface steps face the other
+        StairsShape shape = state.getValue(SHAPE);
+        Direction facing = state.getValue(FACING);
+        boolean left = shape == StairsShape.INNER_LEFT || shape == StairsShape.OUTER_LEFT;
+        return clickedFace == (left ? facing.getClockWise() : facing.getCounterClockWise());
     }
 
     /**
@@ -307,7 +369,8 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
             }
             BlockPos up = pos.relative(Direction.UP);
             // need to call updateShape before setBlock to schedule a tick for water
-            world.setBlockAndUpdate(pos, state.setValue(LAYERS, state.getValue(LAYERS) - 1).updateShape(Direction.UP, world.getBlockState(up), world, pos, up));
+            BlockState lowered = state.setValue(LAYERS, state.getValue(LAYERS) - 1).updateShape(Direction.UP, world.getBlockState(up), world, pos, up);
+            world.setBlockAndUpdate(pos, withCornerShape(lowered, world, pos));
             IWrenchable.playRemoveSound(world, pos);
         }
         return InteractionResult.SUCCESS;
@@ -329,7 +392,16 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
 
     @Override
     public BlockState transform(BlockState state, StructureTransform transform) {
-        return withOrientation(state, BlockUtils.transformFacing(transform, getBase(state)), BlockUtils.transformFacing(transform, getRise(state)));
+        StairsShape shape = state.getValue(SHAPE);
+        if (transform.mirror != null && transform.mirror != Mirror.NONE) {
+            shape = CopycatSlopeBlock.mirrorShape(shape);
+        }
+        if (transform.rotationAxis != null && transform.rotationAxis.isHorizontal() && transform.rotation != Rotation.NONE) {
+            // a half turn around a horizontal axis swaps the sides, a quarter turn has no matching corner
+            shape = transform.rotation == Rotation.CLOCKWISE_180 ? CopycatSlopeBlock.mirrorShape(shape) : StairsShape.STRAIGHT;
+        }
+        BlockState transformed = withOrientation(state, BlockUtils.transformFacing(transform, getBase(state)), BlockUtils.transformFacing(transform, getRise(state)));
+        return transformed.getValue(IN_WALL) ? transformed : transformed.setValue(SHAPE, shape);
     }
 
     @Override
@@ -345,6 +417,8 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
     public @NotNull VoxelShape getShape(BlockState pState, @NotNull BlockGetter pLevel, @NotNull BlockPos pPos, @NotNull CollisionContext pContext) {
         if (isVertical(pState))
             return CCShapes.VERTICAL_SLOPE_LAYER.get(pState.getValue(FACING)).get(pState.getValue(HALF)).get(pState.getValue(LAYERS)).toShape();
+        if (isCorner(pState))
+            return CCShapes.SLOPE_LAYER_CORNER.get(pState.getValue(FACING)).get(pState.getValue(HALF)).get(pState.getValue(SHAPE)).get(pState.getValue(LAYERS)).toShape();
         return CCShapes.SLOPE_LAYER.get(pState.getValue(FACING)).get(pState.getValue(HALF)).get(pState.getValue(IN_WALL)).get(pState.getValue(LAYERS)).toShape();
     }
 
@@ -353,7 +427,7 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
     public @NotNull VoxelShape getCollisionShape(BlockState pState, @NotNull BlockGetter pLevel, @NotNull BlockPos pPos, @NotNull CollisionContext pContext) {
         if (pState.getValue(IN_WALL) || pState.getValue(HALF) == Half.TOP)
             return getShape(pState, pLevel, pPos, pContext);
-        return CCShapes.SLOPE_LAYER_COLLISION.get(pState.getValue(FACING)).get(pState.getValue(LAYERS)).toShape();
+        return CCShapes.SLOPE_LAYER_COLLISION.get(pState.getValue(FACING)).get(pState.getValue(SHAPE)).get(pState.getValue(LAYERS)).toShape();
     }
 
 
@@ -398,13 +472,16 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
         public PlacementOffset getOffset(Player player, Level world, BlockState state, BlockPos pos, BlockHitResult ray) {
             ItemStack held = getItemPredicate().test(player.getMainHandItem()) ? player.getMainHandItem() : player.getOffhandItem();
             int runLayers = getClickedRunLayers(state, world, pos, ray, player, held);
-            if (runLayers != 0)
-                return PlacementOffset.success(pos.relative(ray.getDirection()), s -> copyOrientation(s, state).setValue(LAYERS, runLayers));
+            if (runLayers != 0) {
+                BlockPos runPos = pos.relative(ray.getDirection());
+                return PlacementOffset.success(runPos, s -> withCornerShape(copyOrientation(s, state).setValue(LAYERS, runLayers), world, runPos));
+            }
             if (canStack(state, ray.getDirection()))
                 return PlacementOffset.fail();
             // one item buys one layer, so LAYERS stays at its default
-            return super.getOffset(player, world, state, pos, ray)
-                    .withTransform(s -> copyOrientation(s, state));
+            PlacementOffset offset = super.getOffset(player, world, state, pos, ray);
+            BlockPos newPos = offset.getBlockPos();
+            return offset.withTransform(s -> withCornerShape(copyOrientation(s, state), world, newPos));
         }
 
     }

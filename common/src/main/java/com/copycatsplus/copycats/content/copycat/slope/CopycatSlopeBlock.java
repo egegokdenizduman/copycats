@@ -187,7 +187,7 @@ public class CopycatSlopeBlock extends CCWaterloggedCopycatBlock implements ISta
         return transformed.hasProperty(SHAPE) ? transformed.setValue(SHAPE, shape) : transformed;
     }
 
-    private static StairsShape mirrorShape(StairsShape shape) {
+    public static StairsShape mirrorShape(StairsShape shape) {
         return switch (shape) {
             case STRAIGHT -> StairsShape.STRAIGHT;
             case INNER_LEFT -> StairsShape.INNER_RIGHT;

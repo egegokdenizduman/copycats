@@ -32,16 +32,19 @@ public class CopycatSlopeModelCore extends CopycatModelCore {
         AssemblyTransform transform = t -> t.flipX(flipX).flipY(flipY).rotateY(rot);
         switch (shape) {
             case STRAIGHT -> assembleSlope(context, transform, 0, 16, enhanced);
-            case INNER_LEFT, INNER_RIGHT -> assembleCorner(context, transform, Math::max, 0);
-            case OUTER_LEFT, OUTER_RIGHT -> assembleCorner(context, transform, Math::min, NORTH | WEST);
+            case INNER_LEFT, INNER_RIGHT -> assembleCorner(context, transform, true, 0, 16);
+            case OUTER_LEFT, OUTER_RIGHT -> assembleCorner(context, transform, false, 0, 16);
         }
     }
 
     /**
-     * Assembles a corner of two slopes meeting along the x = z diagonal. The surface height is max(x, z) for an inner
-     * corner and min(x, z) for an outer one, so each half of the surface is a flat triangle.
+     * Assembles a corner of two slopes meeting along the x = z diagonal. The surface rises from minHeight to maxHeight
+     * along max(x, z) for an inner corner and min(x, z) for an outer one, so each half of the surface is a flat triangle.
      */
-    private static void assembleCorner(CopycatRenderContext context, AssemblyTransform transform, QuadSlope.QuadSlopeFunction height, int emptyFaces) {
+    public static void assembleCorner(CopycatRenderContext context, AssemblyTransform transform, boolean inner, double minHeight, double maxHeight) {
+        QuadSlope.QuadSlopeFunction height = (x, z) -> minHeight + (inner ? Math.max(x, z) : Math.min(x, z)) * (maxHeight - minHeight) / 16;
+        // the low walls of an outer corner have no height unless it starts above the floor
+        int emptyFaces = !inner && minHeight == 0 ? NORTH | WEST : 0;
         context.assemblePiece(
                 transform,
                 vec3(0, 0, 0),
