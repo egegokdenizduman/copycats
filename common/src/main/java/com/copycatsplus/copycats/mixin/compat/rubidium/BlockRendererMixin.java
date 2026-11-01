@@ -22,12 +22,19 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(value = BlockRenderer.class, remap = false)
 @Pseudo
 public class BlockRendererMixin {
+    // Sodium 0.8 added a trailing boolean to getColors, so each injection targets both descriptors
     @Inject(
             method = "colorizeQuad",
-            at = @At(
-                    value = "INVOKE",
-                    target = "Lnet/caffeinemc/mods/sodium/client/model/color/ColorProvider;getColors(Lnet/caffeinemc/mods/sodium/client/world/LevelSlice;Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/BlockPos$MutableBlockPos;Ljava/lang/Object;Lnet/caffeinemc/mods/sodium/client/model/quad/ModelQuadView;[I)V"
-            ),
+            at = {
+                    @At(
+                            value = "INVOKE",
+                            target = "Lnet/caffeinemc/mods/sodium/client/model/color/ColorProvider;getColors(Lnet/caffeinemc/mods/sodium/client/world/LevelSlice;Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/BlockPos$MutableBlockPos;Ljava/lang/Object;Lnet/caffeinemc/mods/sodium/client/model/quad/ModelQuadView;[I)V"
+                    ),
+                    @At(
+                            value = "INVOKE",
+                            target = "Lnet/caffeinemc/mods/sodium/client/model/color/ColorProvider;getColors(Lnet/caffeinemc/mods/sodium/client/world/LevelSlice;Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/BlockPos$MutableBlockPos;Ljava/lang/Object;Lnet/caffeinemc/mods/sodium/client/model/quad/ModelQuadView;[IZ)V"
+                    )
+            },
             require = 0
     )
     private void beforeColor(MutableQuadViewImpl quad, int colorIndex, CallbackInfo ci) {
@@ -37,11 +44,18 @@ public class BlockRendererMixin {
 
     @Inject(
             method = "colorizeQuad",
-            at = @At(
-                    value = "INVOKE",
-                    target = "Lnet/caffeinemc/mods/sodium/client/model/color/ColorProvider;getColors(Lnet/caffeinemc/mods/sodium/client/world/LevelSlice;Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/BlockPos$MutableBlockPos;Ljava/lang/Object;Lnet/caffeinemc/mods/sodium/client/model/quad/ModelQuadView;[I)V",
-                    shift = At.Shift.AFTER
-            ),
+            at = {
+                    @At(
+                            value = "INVOKE",
+                            target = "Lnet/caffeinemc/mods/sodium/client/model/color/ColorProvider;getColors(Lnet/caffeinemc/mods/sodium/client/world/LevelSlice;Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/BlockPos$MutableBlockPos;Ljava/lang/Object;Lnet/caffeinemc/mods/sodium/client/model/quad/ModelQuadView;[I)V",
+                            shift = At.Shift.AFTER
+                    ),
+                    @At(
+                            value = "INVOKE",
+                            target = "Lnet/caffeinemc/mods/sodium/client/model/color/ColorProvider;getColors(Lnet/caffeinemc/mods/sodium/client/world/LevelSlice;Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/BlockPos$MutableBlockPos;Ljava/lang/Object;Lnet/caffeinemc/mods/sodium/client/model/quad/ModelQuadView;[IZ)V",
+                            shift = At.Shift.AFTER
+                    )
+            },
             require = 0
     )
     private void afterColor(MutableQuadViewImpl quad, int colorIndex, CallbackInfo ci) {

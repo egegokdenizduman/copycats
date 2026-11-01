@@ -6,6 +6,10 @@ loom {
     accessWidenerPath = file("src/main/resources/copycats.accesswidener")
 }
 
+configurations {
+    sodiumNested { transitive = false }
+}
+
 dependencies {
     // We depend on fabric loader here to use the fabric @Environment annotations and get the mixin dependencies
     // Do NOT use other classes from fabric loader
@@ -29,7 +33,10 @@ dependencies {
     modCompileOnly("dev.emi:emi-xplat-mojmap:${emi_common_version}+${minecraft_version}")
 
     modImplementation("curse.maven:additional-placements-674852:${additionalplacements_neoforge_curse_id}")
-    modImplementation("curse.maven:sodium-394468:${sodium_neoforge_curse_id}")
+    sodiumNested("maven.modrinth:sodium:${sodium_neoforge_version}")
+    // Sodium 0.8 keeps its classes in a nested jar
+    compileOnly(files({ zipTree(configurations.sodiumNested.singleFile).matching { include "META-INF/jarjar/net.caffeinemc.sodium-neoforge-*.jar" } }))
+    modCompileOnly("maven.modrinth:iris:${iris_neoforge_version}")
     modCompileOnly("curse.maven:selene-499980:${moonlight_curse_neoforge_id}")
     modCompileOnly("curse.maven:vertical-slabs-compat-724387:${vertical_slabs_curse_neoforge_id}")
 
