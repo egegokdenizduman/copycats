@@ -60,16 +60,21 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
     public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
     public static final EnumProperty<Half> HALF = BlockStateProperties.HALF;
     public static final BooleanProperty IN_WALL = BlockStateProperties.IN_WALL;
-    // 9 and 10 fill the shallow run between 1 and 7, stacking never reaches them
-    public static final IntegerProperty LAYERS = IntegerProperty.create("layers", 1, 10);
+    // 9 and 10 fill the shallow run between 1 and 7, 11 to 14 the steep run between 3 and 5, stacking never reaches them
+    public static final IntegerProperty LAYERS = IntegerProperty.create("layers", 1, 14);
     // with IN_WALL: the ridge runs along Y, FACING is the high edge and HALF picks the wall beside it
     public static final BooleanProperty VERTICAL = BooleanProperty.create("vertical");
     public static final EnumProperty<StairsShape> SHAPE = BlockStateProperties.STAIRS_SHAPE;
 
     private static final String VERTICAL_ITEM_TAG = "VerticalSlopeLayer";
 
-    // the shallow run from its low end up, each piece starts where the last one ends
-    private static final List<Integer> SHALLOW_RUN = List.of(1, 9, 10, 7);
+    // the shallow and steep runs from their low end up, each piece starts where the last one ends
+    private static final List<List<RunPiece>> RUNS = List.of(
+            List.of(new RunPiece(1, 0, 0), new RunPiece(9, 1, 0), new RunPiece(10, 2, 0), new RunPiece(7, 3, 0)),
+            List.of(new RunPiece(3, 0, 0), new RunPiece(11, 1, 0), new RunPiece(12, 1, 1), new RunPiece(13, 2, 1), new RunPiece(14, 2, 2), new RunPiece(5, 3, 2))
+    );
+    // the rise of the steep run per pixel along it
+    private static final double STEEP_GRADIENT = 0.75;
 
     private static final int placementHelperId = PlacementHelpers.register(new PlacementHelper());
 
@@ -99,15 +104,15 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
     }
 
     private static ItemInteractionResult usePlacementAssist(ItemStack stack, BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hitResult) {
-        int runLayers = getClickedRunLayers(state, level, pos, hitResult, player, stack);
+        RunPlacement run = getClickedRun(state, level, pos, hitResult, player, stack);
         // the helper consumes every click, so stacking clicks must skip it
-        if (runLayers == 0 && canStack(state, hitResult.getDirection()))
+        if (run == null && canStack(state, hitResult.getDirection()))
             return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
         int count = stack.getCount();
         ItemInteractionResult result = InteractionUtils.usePlacementHelper(placementHelperId, stack, state, level, pos, player, hand, hitResult);
         // the helper only takes one item
-        if (runLayers != 0 && stack.getCount() < count)
-            stack.shrink(getItemCost(runLayers) - 1);
+        if (run != null && stack.getCount() < count)
+            stack.shrink(getItemCost(run.layers()) - 1);
         return result;
     }
 
@@ -125,9 +130,9 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
                 return state;
             }
         } else if (isVerticalItem(context.getItemInHand())) {
-            return withCornerShape(continueShallowRun(getVerticalStateForPlacement(stateForPlacement, context), context), context.getLevel(), blockPos);
+            return withCornerShape(continueRun(getVerticalStateForPlacement(stateForPlacement, context), context), context.getLevel(), blockPos);
         } else {
-            return withCornerShape(continueShallowRun(getRegularStateForPlacement(stateForPlacement, context), context), context.getLevel(), blockPos);
+            return withCornerShape(continueRun(getRegularStateForPlacement(stateForPlacement, context), context), context.getLevel(), blockPos);
         }
     }
 
@@ -146,7 +151,7 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
      * Same rules as {@link CopycatSlopeBlock}, only connecting to floor or ceiling pieces whose surfaces meet.
      */
     private static StairsShape getCornerShape(BlockState state, BlockGetter level, BlockPos pos) {
-        if (state.getValue(IN_WALL) || state.getValue(LAYERS) == 8) return StairsShape.STRAIGHT;
+        if (state.getValue(IN_WALL) || state.getValue(LAYERS) == 8 || getKink(state.getValue(LAYERS)) != 0) return StairsShape.STRAIGHT;
         Direction facing = state.getValue(FACING);
         BlockState front = level.getBlockState(pos.relative(facing));
         if (connectsTo(state, front)) {
@@ -204,39 +209,64 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
         }
     }
 
-    // next to the low or high edge of a shallow piece on the same base, the new piece joins its run
-    private BlockState continueShallowRun(BlockState placed, BlockPlaceContext context) {
+    // where a piece on the same base has its next run piece, the new piece joins that run, also diagonally
+    private BlockState continueRun(BlockState placed, BlockPlaceContext context) {
         Player player = context.getPlayer();
         if (player == null || context.isSecondaryUseActive()) return placed;
         BlockPos pos = context.getClickedPos();
-        for (Direction side : Direction.values()) {
-            BlockState neighbor = context.getLevel().getBlockState(pos.relative(side));
+        for (BlockPos neighborPos : BlockPos.betweenClosed(pos.offset(-1, -1, -1), pos.offset(1, 1, 1))) {
+            BlockState neighbor = context.getLevel().getBlockState(neighborPos);
             if (!neighbor.is(this) || getBase(neighbor) != getBase(placed)) continue;
-            int layers = getRunLayers(neighbor, side.getOpposite());
-            if (layers != 0 && canAfford(player, context.getItemInHand(), layers))
-                return copyOrientation(placed, neighbor).setValue(LAYERS, layers);
+            for (Direction side : Direction.values()) {
+                RunPlacement run = getRunPlacement(neighbor, context.getLevel(), neighborPos, side);
+                if (run != null && run.pos().equals(pos) && canAfford(player, context.getItemInHand(), run.layers()))
+                    return copyOrientation(placed, neighbor).setValue(LAYERS, run.layers());
+            }
         }
         return placed;
     }
 
-    // the piece that continues this one's shallow run on the given side, 0 if there is none
-    private static int getRunLayers(BlockState state, Direction side) {
-        Direction rise = getRise(state);
-        int index = SHALLOW_RUN.indexOf(state.getValue(LAYERS));
-        if (index < 0 || side.getAxis() != rise.getAxis()) return 0;
-        int next = index + (side == rise ? 1 : -1);
-        return next >= 0 && next < SHALLOW_RUN.size() ? SHALLOW_RUN.get(next) : 0;
+    // the piece that continues this one's run on the given side, null if there is none or its spot is taken
+    private static RunPlacement getRunPlacement(BlockState state, BlockGetter level, BlockPos pos, Direction side) {
+        int layers = state.getValue(LAYERS);
+        for (List<RunPiece> run : RUNS) {
+            for (RunPiece piece : run) {
+                if (piece.layers() == layers) return getRunPlacement(state, level, pos, side, run, piece);
+            }
+        }
+        return null;
     }
 
-    // the run piece a click on this piece places, 0 if the click isn't meant for the run
-    private static int getClickedRunLayers(BlockState state, Level level, BlockPos pos, BlockHitResult ray, Player player, ItemStack held) {
+    private static RunPlacement getRunPlacement(BlockState state, BlockGetter level, BlockPos pos, Direction side, List<RunPiece> run, RunPiece piece) {
+        Direction rise = getRise(state);
+        Direction up = getBase(state).getOpposite();
+        if (side != rise && side != rise.getOpposite() && side != up) return null;
+        int step = side == rise.getOpposite() ? -1 : 1;
+        for (int i = run.indexOf(piece) + step; i >= 0 && i < run.size(); i += step) {
+            RunPiece next = run.get(i);
+            boolean sameColumn = next.column() == piece.column();
+            // the high side passes the wedge on top, the top only reaches that wedge
+            if (side == rise && sameColumn) continue;
+            if (side == up && !sameColumn) return null;
+            BlockPos nextPos = pos.relative(rise, next.column() - piece.column()).relative(up, next.level() - piece.level());
+            if (level.getBlockState(nextPos).canBeReplaced()) return new RunPlacement(nextPos, next.layers());
+            // going down, a wedge may already have its partner below
+            if (!sameColumn || side == up) return null;
+        }
+        return null;
+    }
+
+    // the run piece a click on this piece places, null if the click isn't meant for the run
+    private static RunPlacement getClickedRun(BlockState state, Level level, BlockPos pos, BlockHitResult ray, Player player, ItemStack held) {
         Direction side = ray.getDirection();
+        int layers = state.getValue(LAYERS);
+        // a wedge has no wall at its low edge, and the top of its partner is partly slope
+        boolean noRealSide = getKink(layers) != 0 && side == (getLowEdge(layers) == 0 ? getRise(state).getOpposite() : getBase(state).getOpposite());
         // the stepped slope surface also reports the low side, only the real block side counts
         double depth = ray.getLocation().get(side.getAxis()) - pos.get(side.getAxis());
-        if (Math.abs(depth - (side.getAxisDirection() == Direction.AxisDirection.POSITIVE ? 1 : 0)) > 1e-4) return 0;
-        if (!level.getBlockState(pos.relative(side)).canBeReplaced()) return 0;
-        int layers = getRunLayers(state, side);
-        return layers != 0 && canAfford(player, held, layers) ? layers : 0;
+        if (!noRealSide && Math.abs(depth - (side.getAxisDirection() == Direction.AxisDirection.POSITIVE ? 1 : 0)) > 1e-4) return null;
+        RunPlacement run = getRunPlacement(state, level, pos, side);
+        return run != null && canAfford(player, held, run.layers()) ? run : null;
     }
 
     private static boolean canAfford(Player player, ItemStack held, int layers) {
@@ -329,6 +359,10 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
         return switch (layers) {
             case 9 -> 2;
             case 10 -> 3;
+            case 11 -> 7;
+            case 12 -> 2;
+            case 13 -> 6;
+            case 14 -> 1;
             default -> layers;
         };
     }
@@ -338,6 +372,9 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
         return switch (layers) {
             case 9 -> 1;
             case 10 -> 2;
+            case 11 -> 3;
+            case 12, 14 -> 0;
+            case 13 -> 2;
             default -> Math.max(layers - 4, 0);
         };
     }
@@ -346,8 +383,28 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
         return switch (layers) {
             case 9 -> 2;
             case 10 -> 3;
+            case 11, 13 -> 4;
+            case 12 -> 2;
+            case 14 -> 1;
             default -> Math.min(layers, 4);
         };
+    }
+
+    // where a steep run piece leaves the block top or floor, 0 for pieces that are one slope
+    public static double getKink(int layers) {
+        return switch (layers) {
+            case 11, 12 -> 16.0 / 3;
+            case 13, 14 -> 32.0 / 3;
+            default -> 0;
+        };
+    }
+
+    // surface height in pixels at z pixels from the low edge
+    public static double getSurfaceHeight(int layers, double z) {
+        double low = getLowEdge(layers) * 4;
+        double high = getHighEdge(layers) * 4;
+        if (getKink(layers) == 0) return low + z / 16 * (high - low);
+        return low > 0 ? Math.min(high, low + z * STEEP_GRADIENT) : Math.max(0, high - (16 - z) * STEEP_GRADIENT);
     }
 
     @Override
@@ -454,6 +511,13 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
         return state.getValue(LAYERS) == 8 ? 0.2f : 1.0f;
     }
 
+    // column along the rise, level above the base
+    private record RunPiece(int layers, int column, int level) {
+    }
+
+    private record RunPlacement(BlockPos pos, int layers) {
+    }
+
     @MethodsReturnNonnullByDefault
     private static class PlacementHelper extends PoleHelper<Direction> {
 
@@ -471,11 +535,9 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
         @Override
         public PlacementOffset getOffset(Player player, Level world, BlockState state, BlockPos pos, BlockHitResult ray) {
             ItemStack held = getItemPredicate().test(player.getMainHandItem()) ? player.getMainHandItem() : player.getOffhandItem();
-            int runLayers = getClickedRunLayers(state, world, pos, ray, player, held);
-            if (runLayers != 0) {
-                BlockPos runPos = pos.relative(ray.getDirection());
-                return PlacementOffset.success(runPos, s -> withCornerShape(copyOrientation(s, state).setValue(LAYERS, runLayers), world, runPos));
-            }
+            RunPlacement run = getClickedRun(state, world, pos, ray, player, held);
+            if (run != null)
+                return PlacementOffset.success(run.pos(), s -> withCornerShape(copyOrientation(s, state).setValue(LAYERS, run.layers()), world, run.pos()));
             if (canStack(state, ray.getDirection()))
                 return PlacementOffset.fail();
             // one item buys one layer, so LAYERS stays at its default

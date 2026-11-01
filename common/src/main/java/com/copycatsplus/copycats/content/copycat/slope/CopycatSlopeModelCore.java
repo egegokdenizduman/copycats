@@ -78,6 +78,36 @@ public class CopycatSlopeModelCore extends CopycatModelCore {
         };
     }
 
+    /**
+     * Assembles a slope that only covers part of the block. From minHeight 0 it rises from the kink to the high edge,
+     * with nothing before the kink. Otherwise it rises from the low edge to the kink and stays flat at maxHeight.
+     */
+    public static void assembleKinkedSlope(CopycatRenderContext context, AssemblyTransform transform, double minHeight, double maxHeight, double kink) {
+        if (minHeight == 0) {
+            context.assemblePiece(
+                    transform,
+                    vec3(0, 0, kink),
+                    aabb(16, 16, 16 - kink).move(0, 0, kink),
+                    cull(NORTH),
+                    updateUV(slope(Direction.UP, (a, b) -> map(kink, 16, 0, maxHeight, b)))
+            );
+            return;
+        }
+        context.assemblePiece(
+                transform,
+                vec3(0, 0, 0),
+                aabb(16, 16, kink),
+                cull(SOUTH),
+                updateUV(slope(Direction.UP, (a, b) -> map(0, kink, minHeight, maxHeight, b)))
+        );
+        context.assemblePiece(
+                transform,
+                vec3(0, 0, kink),
+                aabb(16, 16, 16 - kink).move(0, 0, kink),
+                cull(NORTH)
+        );
+    }
+
     public static void assembleSlope(CopycatRenderContext context, AssemblyTransform transform, double minHeight, double maxHeight, boolean enhanced) {
         if (minHeight == 0) {
             if (enhanced) {

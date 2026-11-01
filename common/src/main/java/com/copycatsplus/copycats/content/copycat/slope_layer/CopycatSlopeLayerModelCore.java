@@ -47,6 +47,10 @@ public class CopycatSlopeLayerModelCore extends CopycatModelCore {
             }
         };
 
-        CopycatSlopeModelCore.assembleSlope(context, transform, low, high, enhanced);
+        double kink = CopycatSlopeLayerBlock.getKink(layer);
+        if (kink != 0)
+            CopycatSlopeModelCore.assembleKinkedSlope(context, transform, low, high, kink);
+        else
+            CopycatSlopeModelCore.assembleSlope(context, transform, low, high, enhanced);
     }
 }

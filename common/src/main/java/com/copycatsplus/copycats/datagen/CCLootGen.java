@@ -39,8 +39,9 @@ public class CCLootGen {
     public static <B extends Block> BiConsumer<LootTable.Builder, B> lootForSlopeLayers() {
         return (builder, block) -> {
             CCLootGen.<B>lootForLayers(CopycatSlopeLayerBlock.LAYERS).accept(builder, block);
-            addLayerPool(builder, block, CopycatSlopeLayerBlock.LAYERS, 9, CopycatSlopeLayerBlock.getItemCost(9));
-            addLayerPool(builder, block, CopycatSlopeLayerBlock.LAYERS, 10, CopycatSlopeLayerBlock.getItemCost(10));
+            for (int i = 9; i <= 14; i++) {
+                addLayerPool(builder, block, CopycatSlopeLayerBlock.LAYERS, i, CopycatSlopeLayerBlock.getItemCost(i));
+            }
         };
     }
 

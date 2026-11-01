@@ -15,6 +15,10 @@
     "layers=7": { "sable:mass": 0.875, "sable:volume": 0.875 },
     "layers=8": { "sable:mass": 1.0,   "sable:volume": 1.0   },
     "layers=9": { "sable:mass": 0.375, "sable:volume": 0.375 },
-    "layers=10": { "sable:mass": 0.625, "sable:volume": 0.625 }
+    "layers=10": { "sable:mass": 0.625, "sable:volume": 0.625 },
+    "layers=11": { "sable:mass": 0.9583, "sable:volume": 0.9583 },
+    "layers=12": { "sable:mass": 0.1667, "sable:volume": 0.1667 },
+    "layers=13": { "sable:mass": 0.8333, "sable:volume": 0.8333 },
+    "layers=14": { "sable:mass": 0.0417, "sable:volume": 0.0417 }
   }
 }

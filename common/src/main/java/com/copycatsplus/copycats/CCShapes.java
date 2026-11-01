@@ -227,7 +227,7 @@ public class CCShapes {
                             layer -> {
                                 int low = CopycatSlopeLayerBlock.getLowEdge(layer);
                                 int high = CopycatSlopeLayerBlock.getHighEdge(layer);
-                                MutableShape baseShape = layer <= 4 ?
+                                MutableShape baseShape = CopycatSlopeLayerBlock.getKink(layer) != 0 ? kinkedSlopeLayer(layer) : layer <= 4 ?
                                         shape(
                                                 IntStream.range(0, SLOPE_SUBDIVISIONS)
                                                         .mapToObj(i -> aabb(16, (i + 1.0) / SLOPE_SUBDIVISIONS * 16 * layer / 4.0, 16.0 / SLOPE_SUBDIVISIONS).move(0, 0, i * 16.0 / SLOPE_SUBDIVISIONS))
@@ -292,15 +292,17 @@ public class CCShapes {
     // Floor slopes walk on half block treads, wider than a sprint tick, like vanilla stairs.
     public static final Map<Direction, Map<StairsShape, MutableShape>> SLOPE_COLLISION =
             forHorizontalDirections(forAll(STAIRS_SHAPE,
-                    slopeShape -> slopeTreads(slopeShape, 0, 16)
+                    slopeShape -> slopeTreads(slopeShape, 8, 16)
             ));
+    // the steep run's treads carry on across its pieces at half a block, 11 keeps a notch so it isn't a full block
     public static final Map<Direction, Map<StairsShape, Map<Integer, MutableShape>>> SLOPE_LAYER_COLLISION =
             forHorizontalDirections(forAll(STAIRS_SHAPE, CopycatSlopeLayerBlock.LAYERS,
-                    (slopeShape, layer) -> slopeTreads(slopeShape, 4 * CopycatSlopeLayerBlock.getLowEdge(layer), 4 * CopycatSlopeLayerBlock.getHighEdge(layer))
+                    (slopeShape, layer) -> layer == 11
+                            ? shape(aabb(16, CopycatSlopeLayerBlock.getSurfaceHeight(layer, 4), 4), aabb(16, 16, 12).move(0, 0, 4))
+                            : slopeTreads(slopeShape, CopycatSlopeLayerBlock.getSurfaceHeight(layer, 8), CopycatSlopeLayerBlock.getSurfaceHeight(layer, 16))
             ));
 
-    private static MutableShape slopeTreads(StairsShape slopeShape, double low, double high) {
-        double middle = (low + high) / 2;
+    private static MutableShape slopeTreads(StairsShape slopeShape, double middle, double high) {
         return switch (slopeShape) {
             case STRAIGHT -> shape(
                     aabb(16, middle, 8),
@@ -316,6 +318,37 @@ public class CCShapes {
                     aabb(8, high, 8).move(8, 0, 8)
             ).flipX(slopeShape == StairsShape.OUTER_RIGHT);
         };
+    }
+
+    // a steep run piece, flat on one side of the kink
+    private static MutableShape kinkedSlopeLayer(int layer) {
+        double low = 4 * CopycatSlopeLayerBlock.getLowEdge(layer);
+        double high = 4 * CopycatSlopeLayerBlock.getHighEdge(layer);
+        double kink = CopycatSlopeLayerBlock.getKink(layer);
+        double kinkHeight = low > 0 ? high : 0;
+        MutableShape shape = shape(
+                IntStream.range(0, SLOPE_SUBDIVISIONS)
+                        .mapToObj(i -> aabb(16, CopycatSlopeLayerBlock.getSurfaceHeight(layer, (i + 1) * SLOPE_STEP), SLOPE_STEP).move(0, 0, i * SLOPE_STEP))
+                        .toArray(MutableAABB[]::new)
+        ).outline(
+                line(vec3(0, 0, 0), vec3(16, 0, 0)),
+                line(vec3(0, 0, 16), vec3(16, 0, 16)),
+                line(vec3(0, 0, 0), vec3(0, 0, 16)),
+                line(vec3(16, 0, 0), vec3(16, 0, 16)),
+                line(vec3(0, 0, 16), vec3(0, high, 16)),
+                line(vec3(16, 0, 16), vec3(16, high, 16)),
+                line(vec3(0, high, 16), vec3(16, high, 16)),
+                line(vec3(0, kinkHeight, kink), vec3(16, kinkHeight, kink)),
+                line(vec3(0, kinkHeight, kink), vec3(0, high, 16)),
+                line(vec3(16, kinkHeight, kink), vec3(16, high, 16))
+        );
+        return low > 0 ? shape.outline(
+                line(vec3(0, 0, 0), vec3(0, low, 0)),
+                line(vec3(16, 0, 0), vec3(16, low, 0)),
+                line(vec3(0, low, 0), vec3(16, low, 0)),
+                line(vec3(0, low, 0), vec3(0, high, kink)),
+                line(vec3(16, low, 0), vec3(16, high, kink))
+        ) : shape;
     }
 
     // two straight slope layers joined, rising to the south and east
