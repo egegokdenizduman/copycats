@@ -18,6 +18,9 @@ import static com.copycatsplus.copycats.foundation.copycat.model.assembly.quad.Q
 
 public class CopycatSlopeModelCore extends CopycatModelCore {
 
+    // Width of the edge band, matching the 2 pixel border of framed textures like casings
+    private static final double ENHANCED_MARGIN = 2;
+
     @Override
     public void emitCopycatQuads(String key, BlockState state, CopycatRenderContext context, BlockState material) {
         Direction facing = state.getValue(CopycatSlopeBlock.FACING);
@@ -75,24 +78,17 @@ public class CopycatSlopeModelCore extends CopycatModelCore {
     public static void assembleSlope(CopycatRenderContext context, AssemblyTransform transform, double minHeight, double maxHeight, boolean enhanced) {
         if (minHeight == 0) {
             if (enhanced) {
-                assembleTriangularSlope(context, transform, maxHeight, getMarginForHeight(maxHeight));
+                assembleTriangularSlope(context, transform, maxHeight, ENHANCED_MARGIN);
             } else {
                 assembleTriangularSlope(context, transform, maxHeight);
             }
         } else {
             if (enhanced) {
-                assembleTrapezoidSlope(context, transform, minHeight, maxHeight, Math.min(2, getMarginForHeight(maxHeight)));
+                assembleTrapezoidSlope(context, transform, minHeight, maxHeight, ENHANCED_MARGIN);
             } else {
                 assembleTrapezoidSlope(context, transform, minHeight, maxHeight);
             }
         }
-    }
-
-    private static double getMarginForHeight(double maxHeight) {
-        if (maxHeight <= 2.5) return 0.5;
-        if (maxHeight <= 4.5) return 1;
-        if (maxHeight <= 8.5) return 2;
-        return 3;
     }
 
     public static void assembleTriangularSlope(CopycatRenderContext context, AssemblyTransform transform, double maxHeight) {
@@ -116,34 +112,30 @@ public class CopycatSlopeModelCore extends CopycatModelCore {
     }
 
     public static void assembleTriangularSlope(CopycatRenderContext context, AssemblyTransform transform, double maxHeight, double margin) {
-        final double angleBottom = Math.toDegrees(Math.atan2(maxHeight, 16));
-        final double marginAdjBottom = margin / Math.tan(Math.toRadians(angleBottom) / 2);
-        final double angleTop = Math.toDegrees(Math.atan2(16, maxHeight));
-        final double marginAdjTop = margin / Math.tan(Math.toRadians(angleTop) / 2);
+        final double angleBottom = Math.atan2(maxHeight, 16);
+        final double angleTop = Math.atan2(16, maxHeight);
+        final double marginAdjTop = margin / Math.tan(angleTop / 2);
+        final double length = Math.sqrt(maxHeight * maxHeight + 16 * 16);
 
-        final double halfLength = Math.sqrt(maxHeight * maxHeight + 16 * 16) / 2;
-
-        final double midLengthBottom = halfLength - marginAdjBottom;
-        final double marginAdjExcessBottom = marginAdjBottom - Math.floor(marginAdjBottom);
-        final double midLengthTop = halfLength - marginAdjTop;
-        final double marginAdjExcessTop = marginAdjTop - Math.floor(marginAdjTop);
-
-        final double alignedLengthBottom = Math.abs(Math.floor(midLengthBottom + marginAdjExcessBottom) - marginAdjExcessBottom);
-        final double alignedLengthTop = Math.floor(midLengthTop + marginAdjExcessTop) - marginAdjExcessTop;
+        // On very shallow slopes the margin doesn't fit above the floor, so the surface piece runs into the floor
+        final boolean fits = margin / Math.tan(angleBottom / 2) + marginAdjTop <= length;
+        final double marginAdjBottom = margin / Math.tan(fits ? angleBottom / 2 : angleBottom);
+        final double coreZ = fits ? marginAdjBottom : margin / Math.sin(angleBottom);
+        final double coreY = fits ? margin : 0;
 
         context.assemblePiece(
                 transform,
                 vec3(0, 0, 0),
-                aabb(16, 16, marginAdjBottom),
+                aabb(16, 16, coreZ),
                 cull(UP | NORTH | SOUTH),
-                updateUV(slope(Direction.UP, (a, b) -> map(0, marginAdjBottom, 0, margin, b)))
+                updateUV(slope(Direction.UP, (a, b) -> map(0, coreZ, 0, coreY, b)))
         );
         context.assemblePiece(
                 transform,
-                vec3(0, 0, marginAdjBottom),
-                aabb(16, 16, 16 - margin - marginAdjBottom).move(0, 0, marginAdjBottom),
+                vec3(0, 0, coreZ),
+                aabb(16, 16, 16 - margin - coreZ).move(0, 0, coreZ),
                 cull(UP | NORTH | SOUTH),
-                updateUV(slope(Direction.UP, (a, b) -> map(marginAdjBottom, 16 - margin, margin, maxHeight - marginAdjTop, b)))
+                updateUV(slope(Direction.UP, (a, b) -> map(coreZ, 16 - margin, coreY, maxHeight - marginAdjTop, b)))
         );
         if (maxHeight == 16) {
             context.assemblePiece(
@@ -154,100 +146,16 @@ public class CopycatSlopeModelCore extends CopycatModelCore {
                     updateUV(slope(Direction.UP, (a, b) -> map(16 - margin, 16, maxHeight - marginAdjTop, maxHeight, b)))
             );
         } else {
-            context.assemblePiece(
-                    transform,
-                    vec3(0, 0, 16 - margin),
-                    aabb(16, maxHeight / 2, margin).move(0, 0, 16 - margin),
-                    cull(UP | NORTH)
-            );
-            context.assemblePiece(
-                    transform,
-                    vec3(0, 16 - maxHeight / 2, 16 - margin),
-                    aabb(16, maxHeight / 2, margin).move(0, 16 - maxHeight / 2, 16 - margin),
-                    cull(UP | DOWN | NORTH),
-                    scale(
-                            pivot(16, 16, 16),
-                            scale(1, 32 / maxHeight, 1)
-                    ),
-                    updateUV(slope(Direction.UP, (a, b) -> map(16 - margin, 16, 16 - marginAdjTop / maxHeight * 32, 16, b))),
-                    scale(
-                            pivot(16, 16, 16),
-                            scale(1, maxHeight / 32, 1)
-                    ),
-                    translate(0, -16 + maxHeight, 0)
-            );
+            assembleHighWall(context, transform, maxHeight, margin, marginAdjTop);
         }
-        context.assemblePiece(
-                transform,
-                vec3(0, 0, 0),
-                aabb(16, 16, marginAdjBottom),
-                cull(DOWN | NORTH | SOUTH),
-                updateUV(slope(Direction.DOWN, (a, b) -> map(0, marginAdjBottom, 0, margin, b))),
-                translate(0, -16, 0),
-                rotate(
-                        pivot(0, 0, 0),
-                        angle(-angleBottom, 0, 0)
-                )
-        );
-        context.assemblePiece(
-                transform,
-                vec3(0, maxHeight - margin, 16 - alignedLengthBottom),
-                aabb(16, margin, alignedLengthBottom).move(0, 16 - margin, marginAdjBottom),
-                cull(DOWN | NORTH | SOUTH),
-                scale(
-                        pivot(16, maxHeight, 16),
-                        scale(1, 1, midLengthBottom / alignedLengthBottom)
-                ),
-                translate(0, 0, -halfLength),
-                rotate(
-                        pivot(16, maxHeight, 16),
-                        angle(-angleBottom, 0, 0)
-                )
-        );
-        context.assemblePiece(
-                transform,
-                vec3(0, maxHeight - margin, 16 - alignedLengthTop),
-                aabb(16, margin, alignedLengthTop).move(0, 16 - margin, 16 - marginAdjTop - alignedLengthTop),
-                cull(DOWN | NORTH | SOUTH),
-                scale(
-                        pivot(16, maxHeight, 16),
-                        scale(1, 1, midLengthTop / alignedLengthTop)
-                ),
-                translate(0, 0, -marginAdjTop),
-                rotate(
-                        pivot(16, maxHeight, 16),
-                        angle(-angleBottom, 0, 0)
-                )
-        );
-        context.assemblePiece(
-                transform,
-                vec3(0, 0, 16 - marginAdjTop),
-                aabb(16, 16, marginAdjTop).move(0, 0, 16 - marginAdjTop),
-                cull(DOWN | NORTH | SOUTH),
-                updateUV(slope(Direction.DOWN, (a, b) -> map(16 - marginAdjTop, 16, margin, 0, b))),
-                translate(0, -16 + maxHeight, 0),
-                rotate(
-                        pivot(16, maxHeight, 16),
-                        angle(-angleBottom, 0, 0)
-                )
-        );
+        assembleSurface(context, transform, 0, maxHeight, margin, marginAdjBottom, marginAdjTop);
     }
 
     public static void assembleTrapezoidSlope(CopycatRenderContext context, AssemblyTransform transform, double minHeight, double maxHeight, double margin) {
-        final double angleBottom = Math.toDegrees(Math.atan2(maxHeight - minHeight, 16)) + 90;
-        final double marginAdjBottom = margin / Math.tan(Math.toRadians(angleBottom) / 2);
-        final double angleTop = Math.toDegrees(Math.atan2(16, maxHeight - minHeight));
-        final double marginAdjTop = margin / Math.tan(Math.toRadians(angleTop) / 2);
-
-        final double halfLength = Math.sqrt((maxHeight - minHeight) * (maxHeight - minHeight) + 16 * 16) / 2;
-
-        final double midLengthBottom = halfLength - marginAdjBottom;
-        final double marginAdjExcessBottom = marginAdjBottom - Math.floor(marginAdjBottom);
-        final double midLengthTop = halfLength - marginAdjTop;
-        final double marginAdjExcessTop = marginAdjTop - Math.floor(marginAdjTop);
-
-        final double alignedLengthBottom = Math.abs(Math.floor(midLengthBottom + marginAdjExcessBottom) - marginAdjExcessBottom);
-        final double alignedLengthTop = Math.floor(midLengthTop + marginAdjExcessTop) - marginAdjExcessTop;
+        final double angleBottom = Math.atan2(maxHeight - minHeight, 16) + Math.PI / 2;
+        final double marginAdjBottom = margin / Math.tan(angleBottom / 2);
+        final double angleTop = Math.atan2(16, maxHeight - minHeight);
+        final double marginAdjTop = margin / Math.tan(angleTop / 2);
 
         if (minHeight == 16 || minHeight == 0) {
             context.assemblePiece(
@@ -297,82 +205,105 @@ public class CopycatSlopeModelCore extends CopycatModelCore {
                     updateUV(slope(Direction.UP, (a, b) -> map(16 - margin, 16, maxHeight - marginAdjTop, maxHeight, b)))
             );
         } else {
-            context.assemblePiece(
-                    transform,
-                    vec3(0, 0, 16 - margin),
-                    aabb(16, maxHeight / 2, margin).move(0, 0, 16 - margin),
-                    cull(UP | NORTH)
-            );
-            context.assemblePiece(
-                    transform,
-                    vec3(0, 16 - maxHeight / 2, 16 - margin),
-                    aabb(16, maxHeight / 2, margin).move(0, 16 - maxHeight / 2, 16 - margin),
-                    cull(UP | DOWN | NORTH),
-                    scale(
-                            pivot(16, 16, 16),
-                            scale(1, 32 / maxHeight, 1)
-                    ),
-                    updateUV(slope(Direction.UP, (a, b) -> map(16 - margin, 16, 16 - marginAdjTop / maxHeight * 32, 16, b))),
-                    scale(
-                            pivot(16, 16, 16),
-                            scale(1, maxHeight / 32, 1)
-                    ),
-                    translate(0, -16 + maxHeight, 0)
-            );
+            assembleHighWall(context, transform, maxHeight, margin, marginAdjTop);
         }
+        assembleSurface(context, transform, minHeight, maxHeight, margin, marginAdjBottom, marginAdjTop);
+    }
+
+    /**
+     * Assembles the wall at the high edge from the bottom and top rows of the material, so that both borders show.
+     * The cut under the surface can reach below the middle of the wall, so the split stays under it on a whole pixel.
+     */
+    private static void assembleHighWall(CopycatRenderContext context, AssemblyTransform transform, double maxHeight, double margin, double marginAdjTop) {
+        final double split = Math.min(maxHeight / 2, Math.floor(maxHeight - marginAdjTop));
+        final double topRows = maxHeight - split;
+        context.assemblePiece(
+                transform,
+                vec3(0, 0, 16 - margin),
+                aabb(16, split, margin).move(0, 0, 16 - margin),
+                cull(UP | NORTH)
+        );
+        context.assemblePiece(
+                transform,
+                vec3(0, 16 - topRows, 16 - margin),
+                aabb(16, topRows, margin).move(0, 16 - topRows, 16 - margin),
+                cull(UP | DOWN | NORTH),
+                scale(
+                        pivot(16, 16, 16),
+                        scale(1, 16 / topRows, 1)
+                ),
+                updateUV(slope(Direction.UP, (a, b) -> map(16 - margin, 16, 16 - marginAdjTop / topRows * 16, 16, b))),
+                scale(
+                        pivot(16, 16, 16),
+                        scale(1, topRows / 16, 1)
+                ),
+                translate(0, -16 + maxHeight, 0)
+        );
+    }
+
+    /**
+     * Assembles the sloped surface as a board cut from the top of the material. Its length becomes a whole number of
+     * equal texture pixels. The low half runs up from the first row and the high half back from the last row, so both
+     * borders stay whole, the halves meet on the pixel grid, and pieces of the same angle share one layout.
+     */
+    private static void assembleSurface(CopycatRenderContext context, AssemblyTransform transform, double minHeight, double maxHeight, double margin, double endLow, double endHigh) {
+        final double slopeAngle = Math.toDegrees(Math.atan2(maxHeight - minHeight, 16));
+        final double length = Math.sqrt((maxHeight - minHeight) * (maxHeight - minHeight) + 16 * 16);
+
+        final int pixels = (int) Math.round(length);
+        final double pixelSize = length / pixels;
+        final int lowHalfEnd = (pixels + 1) / 2;
+        final int highHalfStart = lowHalfEnd - (pixels - 16);
+        final double endRowLow = endLow / pixelSize;
+        final double endRowHigh = 16 - endHigh / pixelSize;
+
+        final QuadTransform placeLow = placeOnSurface(minHeight, 0, slopeAngle, pixelSize);
+        final QuadTransform placeHigh = placeOnSurface(maxHeight, 16, slopeAngle, pixelSize);
+
         context.assemblePiece(
                 transform,
                 vec3(0, 0, 0),
-                aabb(16, 16, marginAdjBottom),
+                aabb(16, 16, endRowLow),
                 cull(DOWN | NORTH | SOUTH),
-                updateUV(slope(Direction.DOWN, (a, b) -> map(0, marginAdjBottom, 0, margin, b))),
-                translate(0, -16 + minHeight, 0),
-                rotate(
-                        pivot(0, minHeight, 0),
-                        angle(90 - angleBottom, 0, 0)
-                )
+                updateUV(slope(Direction.DOWN, (a, b) -> map(0, endRowLow, 0, margin, b))),
+                placeLow
         );
         context.assemblePiece(
                 transform,
-                vec3(0, maxHeight - margin, 16 - alignedLengthBottom),
-                aabb(16, margin, alignedLengthBottom).move(0, 16 - margin, marginAdjBottom),
+                vec3(0, 16 - margin, endRowLow),
+                aabb(16, margin, lowHalfEnd - endRowLow).move(0, 16 - margin, endRowLow),
                 cull(DOWN | NORTH | SOUTH),
-                scale(
-                        pivot(16, maxHeight, 16),
-                        scale(1, 1, midLengthBottom / alignedLengthBottom)
-                ),
-                translate(0, 0, -halfLength),
-                rotate(
-                        pivot(16, maxHeight, 16),
-                        angle(90 - angleBottom, 0, 0)
-                )
+                placeLow
         );
         context.assemblePiece(
                 transform,
-                vec3(0, maxHeight - margin, 16 - alignedLengthTop),
-                aabb(16, margin, alignedLengthTop).move(0, 16 - margin, 16 - marginAdjTop - alignedLengthTop),
+                vec3(0, 16 - margin, highHalfStart),
+                aabb(16, margin, endRowHigh - highHalfStart).move(0, 16 - margin, highHalfStart),
                 cull(DOWN | NORTH | SOUTH),
-                scale(
-                        pivot(16, maxHeight, 16),
-                        scale(1, 1, midLengthTop / alignedLengthTop)
-                ),
-                translate(0, 0, -marginAdjTop),
-                rotate(
-                        pivot(16, maxHeight, 16),
-                        angle(90 - angleBottom, 0, 0)
-                )
+                placeHigh
         );
         context.assemblePiece(
                 transform,
-                vec3(0, 0, 16 - marginAdjTop),
-                aabb(16, 16, marginAdjTop).move(0, 0, 16 - marginAdjTop),
+                vec3(0, 0, endRowHigh),
+                aabb(16, 16, 16 - endRowHigh).move(0, 0, endRowHigh),
                 cull(DOWN | NORTH | SOUTH),
-                updateUV(slope(Direction.DOWN, (a, b) -> map(16 - marginAdjTop, 16, margin, 0, b))),
-                translate(0, -16 + maxHeight, 0),
-                rotate(
-                        pivot(16, maxHeight, 16),
-                        angle(90 - angleBottom, 0, 0)
-                )
+                updateUV(slope(Direction.DOWN, (a, b) -> map(endRowHigh, 16, margin, 0, b))),
+                placeHigh
         );
+    }
+
+    /**
+     * Moves a piece of the material's top face onto the slope, keeping texture row z at height y.
+     */
+    private static QuadTransform placeOnSurface(double y, double z, double slopeAngle, double pixelSize) {
+        final QuadTransform lower = translate(0, y - 16, 0);
+        final QuadTransform stretch = scale(pivot(0, y, z), scale(1, 1, pixelSize));
+        final QuadTransform tilt = rotate(pivot(0, y, z), angle(-slopeAngle, 0, 0));
+        return (quad, sprite) -> {
+            lower.transformQuad(quad, sprite);
+            stretch.transformQuad(quad, sprite);
+            tilt.transformQuad(quad, sprite);
+            return true;
+        };
     }
 }
