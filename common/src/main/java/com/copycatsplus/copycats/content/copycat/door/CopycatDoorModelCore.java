@@ -3,6 +3,7 @@ package com.copycatsplus.copycats.content.copycat.door;
 import com.copycatsplus.copycats.foundation.copycat.model.CopycatModelCore;
 import com.copycatsplus.copycats.foundation.copycat.model.assembly.AssemblyTransform;
 import com.copycatsplus.copycats.foundation.copycat.model.assembly.CopycatRenderContext;
+import com.simibubi.create.foundation.block.connected.CTModel;
 import net.minecraft.world.level.block.ButtonBlock;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -29,17 +30,21 @@ public class CopycatDoorModelCore extends CopycatModelCore {
         }
 
         if (state.getValue(CopycatDoorBlock.CT)) {
-            assembleWithCT(state, context);
+            assembleWithCT(state, context, getModelOf(material) instanceof CTModel);
         } else {
             assembleWithoutCT(state, context);
         }
     }
 
-    private static void assembleWithCT(BlockState state, CopycatRenderContext context) {
+    // Plain tiles reuse their middle to hide the seam. Connected tiles already have none, so keep them in place
+    private static void assembleWithCT(BlockState state, CopycatRenderContext context, boolean connected) {
         int rot = (int) state.getValue(DoorBlock.FACING).toYRot();
         boolean rightHinge = state.getValue(DoorBlock.HINGE).equals(DoorHingeSide.RIGHT);
         DoubleBlockHalf half = state.getValue(DoorBlock.HALF);
         boolean open = state.getValue(DoorBlock.OPEN);
+        int lowerSeamY = connected ? 12 : 4;
+        int upperSeamY = connected ? 0 : 8;
+        int seamCull = connected ? UP | DOWN : 0;
         AssemblyTransform transform = t -> t.rotateY(rot);
         if (half == DoubleBlockHalf.LOWER) {
             if (!open) {
@@ -50,8 +55,8 @@ public class CopycatDoorModelCore extends CopycatModelCore {
                         cull(SOUTH | UP));
                 context.assemblePiece(transform,
                         vec3(0, 12, 0),
-                        aabb(16, 4, 2).move(0, 4, 0),
-                        cull(SOUTH | DOWN));
+                        aabb(16, 4, 2).move(0, lowerSeamY, 0),
+                        cull(SOUTH | DOWN | seamCull));
                 //Back
                 context.assemblePiece(transform,
                         vec3(0, 0, 2),
@@ -59,8 +64,8 @@ public class CopycatDoorModelCore extends CopycatModelCore {
                         cull(NORTH | UP));
                 context.assemblePiece(transform,
                         vec3(0, 12, 2),
-                        aabb(16, 4, 1).move(0, 4, 15),
-                        cull(NORTH | DOWN));
+                        aabb(16, 4, 1).move(0, lowerSeamY, 15),
+                        cull(NORTH | DOWN | seamCull));
             } else {
                 if (!rightHinge) {
                     transform = t -> t.flipX(true).rotateY(rot);
@@ -72,8 +77,8 @@ public class CopycatDoorModelCore extends CopycatModelCore {
                         cull(EAST | UP));
                 context.assemblePiece(transform,
                         vec3(0, 12, 0),
-                        aabb(2, 4, 16).move(0, 4, 0),
-                        cull(EAST | DOWN));
+                        aabb(2, 4, 16).move(0, lowerSeamY, 0),
+                        cull(EAST | DOWN | seamCull));
                 //Back
                 context.assemblePiece(transform,
                         vec3(2, 0, 0),
@@ -81,8 +86,8 @@ public class CopycatDoorModelCore extends CopycatModelCore {
                         cull(WEST | UP));
                 context.assemblePiece(transform,
                         vec3(2, 12, 0),
-                        aabb(1, 4, 16).move(15, 4, 0),
-                        cull(WEST | DOWN));
+                        aabb(1, 4, 16).move(15, lowerSeamY, 0),
+                        cull(WEST | DOWN | seamCull));
             }
         } else {
             if (!open) {
@@ -93,8 +98,8 @@ public class CopycatDoorModelCore extends CopycatModelCore {
                         cull(SOUTH | DOWN));
                 context.assemblePiece(transform,
                         vec3(0, 0, 0),
-                        aabb(16, 4, 2).move(0, 8, 0),
-                        cull(SOUTH | UP));
+                        aabb(16, 4, 2).move(0, upperSeamY, 0),
+                        cull(SOUTH | UP | seamCull));
                 //Back
                 context.assemblePiece(transform,
                         vec3(0, 4, 2),
@@ -102,8 +107,8 @@ public class CopycatDoorModelCore extends CopycatModelCore {
                         cull(NORTH | DOWN));
                 context.assemblePiece(transform,
                         vec3(0, 0, 2),
-                        aabb(16, 4, 1).move(0, 8, 15),
-                        cull(NORTH | UP));
+                        aabb(16, 4, 1).move(0, upperSeamY, 15),
+                        cull(NORTH | UP | seamCull));
             } else {
                 if (!rightHinge) {
                     transform = t -> t.flipX(true).rotateY(rot);
@@ -115,8 +120,8 @@ public class CopycatDoorModelCore extends CopycatModelCore {
                         cull(EAST | DOWN));
                 context.assemblePiece(transform,
                         vec3(0, 0, 0),
-                        aabb(2, 4, 16).move(0, 8, 0),
-                        cull(EAST | UP));
+                        aabb(2, 4, 16).move(0, upperSeamY, 0),
+                        cull(EAST | UP | seamCull));
                 //Back
                 context.assemblePiece(transform,
                         vec3(2, 4, 0),
@@ -124,8 +129,8 @@ public class CopycatDoorModelCore extends CopycatModelCore {
                         cull(WEST | DOWN));
                 context.assemblePiece(transform,
                         vec3(2, 0, 0),
-                        aabb(1, 4, 16).move(15, 8, 0),
-                        cull(WEST | UP));
+                        aabb(1, 4, 16).move(15, upperSeamY, 0),
+                        cull(WEST | UP | seamCull));
             }
         }
     }

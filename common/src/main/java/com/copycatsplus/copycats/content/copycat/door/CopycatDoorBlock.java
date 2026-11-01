@@ -4,6 +4,7 @@ import com.copycatsplus.copycats.CCBlockEntityTypes;
 import com.copycatsplus.copycats.foundation.copycat.CCCopycatBlockEntity;
 import com.copycatsplus.copycats.foundation.copycat.ICopycatBlock;
 import com.copycatsplus.copycats.foundation.copycat.ICopycatBlockEntity;
+import com.copycatsplus.copycats.foundation.copycat.ICustomCTBlocking;
 import com.copycatsplus.copycats.foundation.copycat.IStateType;
 import com.copycatsplus.copycats.utility.BlockEntityUtils;
 import com.copycatsplus.copycats.utility.InteractionUtils;
@@ -36,7 +37,9 @@ import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-public class CopycatDoorBlock extends DoorBlock implements ICopycatBlock, IBE<CCCopycatBlockEntity>, IStateType {
+import java.util.Optional;
+
+public class CopycatDoorBlock extends DoorBlock implements ICopycatBlock, IBE<CCCopycatBlockEntity>, IStateType, ICustomCTBlocking {
 
     public static BooleanProperty CT = BooleanProperty.create("ct");
 
@@ -122,12 +125,25 @@ public class CopycatDoorBlock extends DoorBlock implements ICopycatBlock, IBE<CC
 
     @Override
     public boolean isIgnoredConnectivitySide(BlockAndTintGetter reader, BlockState state, Direction face, BlockPos fromPos, @Nullable BlockPos toPos, @Nullable BlockState toState) {
-        return true;
+        return toPos == null || !isOtherHalf(state, fromPos, toPos, reader.getBlockState(toPos));
     }
 
     @Override
     public boolean canConnectTexturesToward(BlockAndTintGetter reader, BlockPos fromPos, BlockPos toPos, BlockState state) {
-        return false;
+        return fromPos.equals(toPos) || isOtherHalf(state, fromPos, toPos, reader.getBlockState(toPos));
+    }
+
+    @Override
+    public Optional<Boolean> isCTBlocked(BlockAndTintGetter reader, BlockState state, BlockPos pos, BlockPos connectingPos, BlockPos blockingPos, Direction face) {
+        return Optional.of(false);
+    }
+
+    // Only the two halves of one door connect, so neighbouring and stacked doors stay separate
+    private boolean isOtherHalf(BlockState state, BlockPos pos, BlockPos otherPos, BlockState otherState) {
+        if (!state.is(this) || !state.getValue(CT) || !otherState.is(this))
+            return false;
+        boolean lower = state.getValue(HALF) == DoubleBlockHalf.LOWER;
+        return otherState.getValue(HALF) != state.getValue(HALF) && otherPos.equals(lower ? pos.above() : pos.below());
     }
 
     @Override
