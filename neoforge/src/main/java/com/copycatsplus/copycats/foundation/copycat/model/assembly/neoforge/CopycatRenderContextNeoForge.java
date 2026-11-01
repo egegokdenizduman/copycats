@@ -25,8 +25,16 @@ import java.util.List;
 @MethodsReturnNonnullByDefault
 public class CopycatRenderContextNeoForge extends CopycatRenderContext.Base<List<CopycatRenderContextNeoForge.CopycatBakedQuad>, List<CopycatRenderContextNeoForge.CopycatBakedQuad>> {
 
-    public CopycatRenderContextNeoForge(List<CopycatBakedQuad> source, List<CopycatBakedQuad> destination, String property) {
+    private final int variant;
+
+    public CopycatRenderContextNeoForge(List<CopycatBakedQuad> source, List<CopycatBakedQuad> destination, String property, int variant) {
         super(source, destination, property);
+        this.variant = variant;
+    }
+
+    @Override
+    public int variant() {
+        return variant;
     }
 
     @Override

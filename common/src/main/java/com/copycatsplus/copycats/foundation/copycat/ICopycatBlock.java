@@ -1,5 +1,6 @@
 package com.copycatsplus.copycats.foundation.copycat;
 
+import com.copycatsplus.copycats.foundation.copycat.model.assembly.CopycatRenderContext;
 import com.copycatsplus.copycats.content.copycat.board.CopycatBoardBlock;
 import com.copycatsplus.copycats.foundation.copycat.model.ScaledBlockAndTintGetter;
 import com.copycatsplus.copycats.foundation.copycat.multistate.IMultiStateCopycatBlock;
@@ -567,6 +568,14 @@ public interface ICopycatBlock extends IWrenchable, IStateType, TransformableBlo
             }
             return true;
         }
+    }
+
+    /**
+     * Extra world-dependent information for the model of this copycat, available as {@link CopycatRenderContext#variant()}.
+     * Only used with connected texture materials.
+     */
+    default int getModelVariant(BlockAndTintGetter reader, BlockState state, BlockPos pos) {
+        return 0;
     }
 
     /**

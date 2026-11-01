@@ -16,6 +16,13 @@ import javax.annotation.ParametersAreNonnullByDefault;
 public interface CopycatRenderContext {
 
     /**
+     * The value of {@link com.copycatsplus.copycats.foundation.copycat.ICopycatBlock#getModelVariant} for the block being assembled.
+     */
+    default int variant() {
+        return 0;
+    }
+
+    /**
      * Copy a piece of cuboid from the source model and assemble it to the copycat.
      *
      * @param assemblyTransform The transform to apply to the entire operation, changing the positions, AABBs and cull faces, while not affecting the source model. This can be used to combine repetitive assembly code, or to rotate the entire piece according to block state.

@@ -29,6 +29,7 @@ public class CopycatSlopeModelCore extends CopycatModelCore {
     // Width of the edge band, matching the 2 pixel border of framed textures like casings
     private static final double ENHANCED_MARGIN = 2;
     private static final double DIAGONAL_EPSILON = 1.0E-5;
+    private static final double RAMP_EDGE_OFFSET = 0.002;
 
     @Override
     public void emitCopycatQuads(String key, BlockState state, CopycatRenderContext context, BlockState material) {
@@ -40,10 +41,39 @@ public class CopycatSlopeModelCore extends CopycatModelCore {
         boolean flipX = shape == StairsShape.INNER_RIGHT || shape == StairsShape.OUTER_RIGHT;
         AssemblyTransform transform = t -> t.flipX(flipX).flipY(flipY).rotateY(rot);
         switch (shape) {
-            case STRAIGHT -> assembleSlope(context, transform, 0, 16, enhanced);
+            case STRAIGHT -> {
+                assembleSlope(context, transform, 0, 16, enhanced);
+                if (enhanced && (context.variant() & CopycatSlopeBlock.RAMP_LOW) != 0)
+                    assembleRampEdge(context, transform, 0);
+                if (enhanced && (context.variant() & CopycatSlopeBlock.RAMP_HIGH) != 0)
+                    assembleRampEdge(context, transform, 8);
+            }
             case INNER_LEFT, INNER_RIGHT -> assembleCorner(context, transform, true, 0, 16, enhanced);
             case OUTER_LEFT, OUTER_RIGHT -> assembleCorner(context, transform, false, 0, 16, enhanced);
         }
+    }
+
+    /**
+     * Draws half of the surface's edge on the side faces without the mitre that ends it inside the block, so that it
+     * meets the next piece of a ramp. At the low edge it reaches past the block, in front of the corner of the block below.
+     */
+    private static void assembleRampEdge(CopycatRenderContext context, AssemblyTransform transform, double startZ) {
+        final QuadTransform shear = (quad, sprite) -> {
+            for (MutableVertex vertex : quad.vertices) {
+                // the edge is cut square to a 45 degree surface, so it is this much taller than its rows
+                vertex.xyz.y = vertex.xyz.z - (1 - vertex.xyz.y) * Math.sqrt(2);
+                vertex.xyz.x += vertex.xyz.x < 0.5 ? -RAMP_EDGE_OFFSET : RAMP_EDGE_OFFSET;
+            }
+            quad.disableFinalAutoCull = true;
+            return true;
+        };
+        context.assemblePiece(
+                transform,
+                vec3(0, 16 - ENHANCED_MARGIN, startZ),
+                aabb(16, ENHANCED_MARGIN, 8).move(0, 16 - ENHANCED_MARGIN, startZ),
+                cull(UP | DOWN | NORTH | SOUTH),
+                shear
+        );
     }
 
     /**

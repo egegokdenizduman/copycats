@@ -13,6 +13,7 @@ import com.copycatsplus.copycats.utility.neoforge.ModelDataUtils;
 import com.simibubi.create.AllBlocks;
 import com.simibubi.create.content.decoration.copycat.CopycatModel;
 import com.simibubi.create.content.decoration.copycat.CopycatSpecialCases;
+import com.simibubi.create.foundation.block.connected.CTModel;
 import com.simibubi.create.foundation.model.BakedModelWrapperWithData;
 import net.createmod.catnip.data.Iterate;
 import net.createmod.ponder.render.VirtualRenderHelper;
@@ -51,6 +52,7 @@ public class CopycatModelNeoForge extends BakedModelWrapperWithData {
     private static final ModelProperty<Map<String, OcclusionData>> OCCLUSION_PROPERTY = new ModelProperty<>();
     private static final ModelProperty<Map<String, ModelData>> WRAPPED_DATA_PROPERTY = new ModelProperty<>();
     private static final ModelProperty<Set<String>> EMISSIVE_PROPERTY = new ModelProperty<>();
+    private static final ModelProperty<Integer> VARIANT_PROPERTY = new ModelProperty<>();
 
     private static final ChunkRenderTypeSet allRenderTypes = ChunkRenderTypeSet.of(RenderType.solid(), RenderType.cutout(), RenderType.cutoutMipped(), RenderType.translucent());
 
@@ -178,6 +180,8 @@ public class CopycatModelNeoForge extends BakedModelWrapperWithData {
                     occlusionData
             );
             builder.with(OCCLUSION_PROPERTY, occlusionMap);
+            if (getModelOf(material) instanceof CTModel)
+                builder.with(VARIANT_PROPERTY, copycatBlock.getModelVariant(world, state, pos));
 
             FilteredBlockAndTintGetter filteredWorld = new FilteredBlockAndTintGetterForge(world,
                     targetPos -> {
@@ -276,7 +280,7 @@ public class CopycatModelNeoForge extends BakedModelWrapperWithData {
                 quads.add(new CopycatRenderContextNeoForge.CopycatBakedQuad(templateQuad, null, entry.key()));
             }
 
-            List<CopycatRenderContextNeoForge.CopycatBakedQuad> croppedQuads = getCroppedQuads(entry, state, quads, material);
+            List<CopycatRenderContextNeoForge.CopycatBakedQuad> croppedQuads = getCroppedQuads(entry, state, quads, material, data);
 
             CopycatModelNeoForge.OcclusionData occlusionData = occlusionDataMap.get(entry.key());
             for (CopycatRenderContextNeoForge.CopycatBakedQuad croppedQuad : croppedQuads) {
@@ -316,11 +320,12 @@ public class CopycatModelNeoForge extends BakedModelWrapperWithData {
         return quads;
     }
 
-    private List<CopycatRenderContextNeoForge.CopycatBakedQuad> getCroppedQuads(CopycatModelCore.ModelEntry entry, BlockState state, List<CopycatRenderContextNeoForge.CopycatBakedQuad> templateQuads, BlockState material) {
+    private List<CopycatRenderContextNeoForge.CopycatBakedQuad> getCroppedQuads(CopycatModelCore.ModelEntry entry, BlockState state, List<CopycatRenderContextNeoForge.CopycatBakedQuad> templateQuads, BlockState material, ModelData data) {
         if (entry.part() == null)
             return templateQuads;
         List<CopycatRenderContextNeoForge.CopycatBakedQuad> quads = new ArrayList<>();
-        CopycatRenderContextNeoForge context = new CopycatRenderContextNeoForge(templateQuads, quads, entry.key());
+        Integer variant = data.get(VARIANT_PROPERTY);
+        CopycatRenderContextNeoForge context = new CopycatRenderContextNeoForge(templateQuads, quads, entry.key(), variant == null ? 0 : variant);
         entry.part().emitCopycatQuads(entry.key(), state, context, material);
         return quads;
     }

@@ -60,6 +60,10 @@ public class CopycatSlopeBlock extends CCWaterloggedCopycatBlock implements ISta
     private static final double TURN_DEPTH = 4.0 / 16;
     private static final double ON_FACE = 1e-4;
 
+    // model variant flags, for a ramp carrying on past the low or high edge
+    public static final int RAMP_LOW = 1;
+    public static final int RAMP_HIGH = 2;
+
     private static final int placementHelperId = PlacementHelpers.register(new PlacementHelper());
 
     public CopycatSlopeBlock(Properties pProperties) {
@@ -105,19 +109,20 @@ public class CopycatSlopeBlock extends CCWaterloggedCopycatBlock implements ISta
         BlockPos offset = otherPos.subtract(pos);
         int along = offset.get(rising.getAxis());
         // the same goes for the inner corner tile, as the slope's diagonal neighbours rarely fill that corner
-        if (along == -rising.getAxisDirection().getStep() || along != 0 && offset.getY() != 0) return true;
-        // the surface's edge can't line up with the next piece of a ramp, so ramps leave it plain
-        Direction surfaceFace = getSurfaceFace(state);
-        return otherPos.equals(pos.relative(surfaceFace)) && isInRamp(reader, state, pos, surfaceFace);
+        return along == -rising.getAxisDirection().getStep() || along != 0 && offset.getY() != 0;
     }
 
-    private boolean isInRamp(BlockAndTintGetter reader, BlockState state, BlockPos pos, Direction surfaceFace) {
-        for (Direction side : Direction.Plane.HORIZONTAL) {
-            BlockPos surfacePos = getCTSurfacePos(reader, state, pos, pos.relative(side), surfaceFace);
-            if (surfacePos != null && ICopycatBlock.getMaterial(reader, surfacePos) == ICopycatBlock.getMaterial(reader, pos))
-                return true;
-        }
-        return false;
+    @Override
+    public int getModelVariant(BlockAndTintGetter reader, BlockState state, BlockPos pos) {
+        if (state.getValue(SHAPE) != StairsShape.STRAIGHT) return 0;
+        Direction facing = state.getValue(FACING);
+        return (isRampContinued(reader, state, pos, facing.getOpposite()) ? RAMP_LOW : 0)
+                | (isRampContinued(reader, state, pos, facing) ? RAMP_HIGH : 0);
+    }
+
+    private boolean isRampContinued(BlockAndTintGetter reader, BlockState state, BlockPos pos, Direction side) {
+        BlockPos surfacePos = getCTSurfacePos(reader, state, pos, pos.relative(side), getSurfaceFace(state));
+        return surfacePos != null && ICopycatBlock.getMaterial(reader, surfacePos) == ICopycatBlock.getMaterial(reader, pos);
     }
 
     @Nullable
