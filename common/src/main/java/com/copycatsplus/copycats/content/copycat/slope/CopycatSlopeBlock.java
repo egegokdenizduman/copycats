@@ -101,7 +101,11 @@ public class CopycatSlopeBlock extends CCWaterloggedCopycatBlock implements ISta
         // a side face narrows to nothing at the low edge, where a border would only show as a stray notch
         if (face.getAxis().isVertical() || isHighEdge(state, face) || isLowEdge(state, face)) return false;
         Direction rising = getRisingDirection(state, face);
-        return rising != null && otherPos.subtract(pos).get(rising.getAxis()) == -rising.getAxisDirection().getStep();
+        if (rising == null) return false;
+        BlockPos offset = otherPos.subtract(pos);
+        int along = offset.get(rising.getAxis());
+        // the same goes for the inner corner tile, as the slope's diagonal neighbours rarely fill that corner
+        return along == -rising.getAxisDirection().getStep() || along != 0 && offset.getY() != 0;
     }
 
     @Nullable
