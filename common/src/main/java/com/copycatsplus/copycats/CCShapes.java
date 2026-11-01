@@ -223,6 +223,11 @@ public class CCShapes {
                                 return shape;
                             }
                     ))));
+    public static final Map<Direction, Map<Half, Map<Integer, MutableShape>>> VERTICAL_SLOPE_LAYER =
+            forHorizontalDirections(forAll(HALF, half -> forAll(LAYERS,
+                    layer -> SLOPE_LAYER.get(Direction.SOUTH).get(Half.BOTTOM).get(false).get(layer).copy()
+                            .rotateZ(-90).flipX(half == Half.TOP)
+            )));
 
     public static AssemblyTransform halves(Half half) {
         return t -> t.flipY(half == Half.TOP);

@@ -18,6 +18,7 @@ import net.createmod.catnip.placement.PlacementOffset;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -25,12 +26,12 @@ import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
@@ -56,6 +57,10 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
     public static final EnumProperty<Half> HALF = BlockStateProperties.HALF;
     public static final BooleanProperty IN_WALL = BlockStateProperties.IN_WALL;
     public static final IntegerProperty LAYERS = BlockStateProperties.LAYERS;
+    // with IN_WALL: the ridge runs along Y, FACING is the high edge and HALF picks the wall beside it
+    public static final BooleanProperty VERTICAL = BooleanProperty.create("vertical");
+
+    private static final String VERTICAL_ITEM_TAG = "VerticalSlopeLayer";
 
     private static final int placementHelperId = PlacementHelpers.register(new PlacementHelper());
 
@@ -65,13 +70,14 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
                 .setValue(FACING, Direction.NORTH)
                 .setValue(HALF, Half.BOTTOM)
                 .setValue(IN_WALL, false)
+                .setValue(VERTICAL, false)
                 .setValue(LAYERS, 1)
         );
     }
 
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> pBuilder) {
-        super.createBlockStateDefinition(pBuilder.add(FACING, HALF, IN_WALL, LAYERS));
+        super.createBlockStateDefinition(pBuilder.add(FACING, HALF, IN_WALL, VERTICAL, LAYERS));
     }
 
     @Override
@@ -98,6 +104,8 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
                 Copycats.LOGGER.warn("Can't figure out where to place a slope layer! Please file an issue if you see this.");
                 return state;
             }
+        } else if (isVerticalItem(context.getItemInHand())) {
+            return getVerticalStateForPlacement(stateForPlacement, context);
         } else {
             Direction playerHorizontal = context.getHorizontalDirection();
             Direction clickedFace = context.getClickedFace();
@@ -122,6 +130,59 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
         }
     }
 
+    private static BlockState getVerticalStateForPlacement(BlockState state, BlockPlaceContext context) {
+        boolean clickedWall = context.getClickedFace().getAxis().isHorizontal();
+        Direction main = clickedWall ? context.getClickedFace().getOpposite() : context.getHorizontalDirection();
+        Direction.Axis crossAxis = main.getClockWise().getAxis();
+        double click = context.getClickLocation().get(crossAxis) - context.getClickedPos().get(crossAxis);
+        Direction cross = Direction.fromAxisAndDirection(crossAxis, click > 0.5 ? Direction.AxisDirection.POSITIVE : Direction.AxisDirection.NEGATIVE);
+        return clickedWall ? withOrientation(state, main, cross) : withOrientation(state, cross, main);
+    }
+
+    /**
+     * Marks a slope layer item so that it places the vertical form.
+     */
+    public static void markVerticalItem(ItemStack stack) {
+        CustomData.update(DataComponents.CUSTOM_DATA, stack, tag -> tag.putBoolean(VERTICAL_ITEM_TAG, true));
+    }
+
+    public static boolean isVerticalItem(ItemStack stack) {
+        return stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).contains(VERTICAL_ITEM_TAG);
+    }
+
+    public static boolean isVertical(BlockState state) {
+        return state.getValue(IN_WALL) && state.getValue(VERTICAL);
+    }
+
+    // the side the flat underside rests against
+    private static Direction getBase(BlockState state) {
+        Direction facing = state.getValue(FACING);
+        boolean top = state.getValue(HALF) == Half.TOP;
+        if (isVertical(state)) return top ? facing.getClockWise() : facing.getCounterClockWise();
+        if (state.getValue(IN_WALL)) return facing.getOpposite();
+        return top ? Direction.UP : Direction.DOWN;
+    }
+
+    // the direction of the high edge
+    private static Direction getRise(BlockState state) {
+        if (!state.getValue(IN_WALL) || isVertical(state)) return state.getValue(FACING);
+        return state.getValue(HALF) == Half.TOP ? Direction.UP : Direction.DOWN;
+    }
+
+    private static BlockState withOrientation(BlockState state, Direction base, Direction rise) {
+        if (base.getAxis().isVertical())
+            return state.setValue(IN_WALL, false).setValue(VERTICAL, false)
+                    .setValue(FACING, rise)
+                    .setValue(HALF, base == Direction.UP ? Half.TOP : Half.BOTTOM);
+        if (rise.getAxis().isVertical())
+            return state.setValue(IN_WALL, true).setValue(VERTICAL, false)
+                    .setValue(FACING, base.getOpposite())
+                    .setValue(HALF, rise == Direction.UP ? Half.TOP : Half.BOTTOM);
+        return state.setValue(IN_WALL, true).setValue(VERTICAL, true)
+                .setValue(FACING, rise)
+                .setValue(HALF, base == rise.getClockWise() ? Half.TOP : Half.BOTTOM);
+    }
+
     @SuppressWarnings("deprecation")
     @Override
     public boolean canBeReplaced(@NotNull BlockState pState, BlockPlaceContext pUseContext) {
@@ -132,18 +193,7 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
 
     private static boolean canStack(BlockState state, Direction clickedFace) {
         if (state.getValue(LAYERS) == 8) return false;
-        Half half = state.getValue(HALF);
-        boolean inWall = state.getValue(IN_WALL);
-        Direction facing = state.getValue(FACING);
-        if(!inWall) {
-            if (clickedFace == facing.getOpposite()) return true;
-        }
-        else {
-            if (clickedFace == facing) return true;
-        }
-        if (half == Half.TOP && clickedFace == Direction.DOWN) return true;
-        if (half == Half.BOTTOM && clickedFace == Direction.UP) return true;
-        return false;
+        return clickedFace == getBase(state).getOpposite() || clickedFace == getRise(state).getOpposite();
     }
 
     @Override
@@ -186,10 +236,7 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
 
     @Override
     public BlockState transform(BlockState state, StructureTransform transform) {
-        // todo: vertical slope layer not supported yet
-        if (transform.rotationAxis != null && transform.rotationAxis != Direction.Axis.Y && (transform.rotation == Rotation.CLOCKWISE_90 || transform.rotation == Rotation.COUNTERCLOCKWISE_90))
-            transform.rotation = Rotation.NONE;
-        return BlockUtils.transformStepLikeHorizontal(state, transform, defaultBlockState());
+        return withOrientation(state, BlockUtils.transformFacing(transform, getBase(state)), BlockUtils.transformFacing(transform, getRise(state)));
     }
 
     @Override
@@ -203,6 +250,8 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
     @SuppressWarnings("deprecation")
     @Override
     public @NotNull VoxelShape getShape(BlockState pState, @NotNull BlockGetter pLevel, @NotNull BlockPos pPos, @NotNull CollisionContext pContext) {
+        if (isVertical(pState))
+            return CCShapes.VERTICAL_SLOPE_LAYER.get(pState.getValue(FACING)).get(pState.getValue(HALF)).get(pState.getValue(LAYERS)).toShape();
         return CCShapes.SLOPE_LAYER.get(pState.getValue(FACING)).get(pState.getValue(HALF)).get(pState.getValue(IN_WALL)).get(pState.getValue(LAYERS)).toShape();
     }
 
@@ -234,8 +283,8 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
     private static class PlacementHelper extends PoleHelper<Direction> {
 
         private PlacementHelper() {
-            // floor and IN_WALL forms both run along the axis perpendicular to FACING
-            super(CCBlocks.COPYCAT_SLOPE_LAYER::has, state -> state.getValue(FACING).getClockWise().getAxis(), FACING);
+            // runs along the ridge
+            super(CCBlocks.COPYCAT_SLOPE_LAYER::has, state -> isVertical(state) ? Direction.Axis.Y : state.getValue(FACING).getClockWise().getAxis(), FACING);
         }
 
         @Override
@@ -252,7 +301,8 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
             return super.getOffset(player, world, state, pos, ray)
                     .withTransform(s -> s.setValue(FACING, state.getValue(FACING))
                             .setValue(HALF, state.getValue(HALF))
-                            .setValue(IN_WALL, state.getValue(IN_WALL)));
+                            .setValue(IN_WALL, state.getValue(IN_WALL))
+                            .setValue(VERTICAL, state.getValue(VERTICAL)));
         }
 
     }

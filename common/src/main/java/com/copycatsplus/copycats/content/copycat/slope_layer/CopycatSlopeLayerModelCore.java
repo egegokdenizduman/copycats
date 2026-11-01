@@ -18,6 +18,11 @@ public class CopycatSlopeLayerModelCore extends CopycatModelCore {
         boolean in_wall = state.getValue(CopycatSlopeLayerBlock.IN_WALL);
 
         AssemblyTransform transform = t -> {
+            if (CopycatSlopeLayerBlock.isVertical(state)) {
+                t.rotateZ(-90).flipX(half == Half.TOP).rotateY((int) facing.toYRot());
+                return;
+            }
+
             t.rotateY((int) facing.toYRot()).flipY(half == Half.TOP);
 
             if (in_wall) {
