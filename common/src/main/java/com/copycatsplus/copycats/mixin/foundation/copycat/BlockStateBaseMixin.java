@@ -16,21 +16,27 @@ public class BlockStateBaseMixin {
     @Unique
     private static final ResourceLocation COPYCAT_BASE = ResourceLocation.fromNamespaceAndPath(Mods.CREATE.id(), "copycat_base");
 
+    // 0 = not computed, 1 = no override, 2 = return false
+    @Unique
+    private byte copycats$occlusionOverride;
+
     @Inject(
             method = "canOcclude",
             at = @At("HEAD"),
             cancellable = true
     )
     private void customOcclusion(CallbackInfoReturnable<Boolean> cir) {
-        BlockBehaviour.BlockStateBase instance = (BlockBehaviour.BlockStateBase) (Object) this;
-        try {
-            if (instance.getBlockHolder().is(COPYCAT_BASE)) {
-                cir.setReturnValue(false);
+        byte override = copycats$occlusionOverride;
+        if (override == 0) {
+            BlockBehaviour.BlockStateBase instance = (BlockBehaviour.BlockStateBase) (Object) this;
+            try {
+                override = instance.getBlock() instanceof BracketBlock || instance.getBlockHolder().is(COPYCAT_BASE) ? (byte) 2 : (byte) 1;
+                copycats$occlusionOverride = override;
+            } catch (IllegalStateException e) {
+                // todo: illegal access if resource location is accessed before registry is initialized
             }
-        } catch (IllegalStateException e) {
-            // todo: illegal access if resource location is accessed before registry is initialized
         }
-        if (instance.getBlock() instanceof BracketBlock) {
+        if (override == 2) {
             cir.setReturnValue(false);
         }
     }
