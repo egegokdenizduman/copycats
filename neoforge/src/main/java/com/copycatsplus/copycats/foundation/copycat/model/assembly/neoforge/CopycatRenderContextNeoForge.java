@@ -132,7 +132,7 @@ public class CopycatRenderContextNeoForge extends CopycatRenderContext.Base<List
         }
 
         public BakedQuad toBakedQuad(@Nullable BlockState material) {
-            return new BakedQuad(getVertices(), getTintIndex(), getDirection(), new MultiStateTextureAtlasSprite(property, material, getSprite()), isShade());
+            return new BakedQuad(getVertices(), getTintIndex(), getDirection(), MultiStateTextureAtlasSprite.of(property, material, getSprite()), isShade());
         }
     }
 }

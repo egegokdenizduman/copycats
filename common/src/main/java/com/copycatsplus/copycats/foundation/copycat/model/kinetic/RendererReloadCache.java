@@ -30,8 +30,11 @@ public final class RendererReloadCache<T, U> {
 
     @ApiStatus.Internal
     public static void onReloadLevelRenderer(ReloadLevelRendererEvent e) {
-        for (RendererReloadCache<?, ?> cache : ALL) {
-            cache.clear();
+        // Caches can be created on chunk meshing threads
+        synchronized (ALL) {
+            for (RendererReloadCache<?, ?> cache : ALL) {
+                cache.clear();
+            }
         }
     }
 }
