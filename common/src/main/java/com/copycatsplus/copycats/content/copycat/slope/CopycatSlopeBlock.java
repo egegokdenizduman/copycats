@@ -97,7 +97,7 @@ public class CopycatSlopeBlock extends CCWaterloggedCopycatBlock implements ISta
     }
 
     @Override
-    public boolean isCTContinued(BlockState state, BlockPos pos, BlockPos otherPos, Direction face) {
+    public boolean isCTContinued(BlockAndTintGetter reader, BlockState state, BlockPos pos, BlockPos otherPos, Direction face) {
         // a side face narrows to nothing at the low edge, where a border would only show as a stray notch
         if (face.getAxis().isVertical() || isHighEdge(state, face) || isLowEdge(state, face)) return false;
         Direction rising = getRisingDirection(state, face);
@@ -105,7 +105,19 @@ public class CopycatSlopeBlock extends CCWaterloggedCopycatBlock implements ISta
         BlockPos offset = otherPos.subtract(pos);
         int along = offset.get(rising.getAxis());
         // the same goes for the inner corner tile, as the slope's diagonal neighbours rarely fill that corner
-        return along == -rising.getAxisDirection().getStep() || along != 0 && offset.getY() != 0;
+        if (along == -rising.getAxisDirection().getStep() || along != 0 && offset.getY() != 0) return true;
+        // the surface's edge can't line up with the next piece of a ramp, so ramps leave it plain
+        Direction surfaceFace = getSurfaceFace(state);
+        return otherPos.equals(pos.relative(surfaceFace)) && isInRamp(reader, state, pos, surfaceFace);
+    }
+
+    private boolean isInRamp(BlockAndTintGetter reader, BlockState state, BlockPos pos, Direction surfaceFace) {
+        for (Direction side : Direction.Plane.HORIZONTAL) {
+            BlockPos surfacePos = getCTSurfacePos(reader, state, pos, pos.relative(side), surfaceFace);
+            if (surfacePos != null && ICopycatBlock.getMaterial(reader, surfacePos) == ICopycatBlock.getMaterial(reader, pos))
+                return true;
+        }
+        return false;
     }
 
     @Nullable

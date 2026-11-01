@@ -37,7 +37,7 @@ public class ConnectedTextureBehaviourMixin {
         BlockState selfState = reader.getBlockState(currentPos);
         if (!(selfState.getBlock() instanceof ICustomCTBlocking customBlocking)) return;
         BlockPos otherPos = currentPos.relative(horizontal, sh).relative(vertical, sv);
-        if (customBlocking.isCTContinued(selfState, currentPos, otherPos, textureSide)) {
+        if (customBlocking.isCTContinued(reader, selfState, currentPos, otherPos, textureSide)) {
             cir.setReturnValue(true);
             return;
         }

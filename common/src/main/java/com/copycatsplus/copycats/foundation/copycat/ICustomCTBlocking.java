@@ -59,13 +59,14 @@ public interface ICustomCTBlocking {
     /**
      * Determine whether a face of this block shows no border towards a position, whatever is there.
      *
+     * @param reader   The world.
      * @param state    The state of this block, which is trying to render connected textures.
      * @param pos      The position of this block.
      * @param otherPos The position that this block is trying to connect to.
      * @param face     The block face that this block is trying to render.
      * @return Whether the face is treated as connected.
      */
-    default boolean isCTContinued(BlockState state, BlockPos pos, BlockPos otherPos, Direction face) {
+    default boolean isCTContinued(BlockAndTintGetter reader, BlockState state, BlockPos pos, BlockPos otherPos, Direction face) {
         return false;
     }
 
