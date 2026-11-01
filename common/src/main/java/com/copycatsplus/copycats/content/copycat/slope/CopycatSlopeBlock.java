@@ -316,14 +316,6 @@ public class CopycatSlopeBlock extends CCWaterloggedCopycatBlock implements ISta
         return CCShapes.SLOPE.get(pState.getValue(FACING)).get(pState.getValue(HALF)).get(pState.getValue(SHAPE)).toShape();
     }
 
-    @SuppressWarnings("deprecation")
-    @Override
-    public @NotNull VoxelShape getCollisionShape(BlockState pState, @NotNull BlockGetter pLevel, @NotNull BlockPos pPos, @NotNull CollisionContext pContext) {
-        if (pState.getValue(HALF) == Half.TOP)
-            return getShape(pState, pLevel, pPos, pContext);
-        return CCShapes.SLOPE_COLLISION.get(pState.getValue(FACING)).get(pState.getValue(SHAPE)).toShape();
-    }
-
 
     public boolean supportsExternalFaceHiding(BlockState state) {
         return true;
