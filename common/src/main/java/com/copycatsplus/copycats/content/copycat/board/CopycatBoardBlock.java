@@ -25,6 +25,7 @@ import net.minecraft.core.Vec3i;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
@@ -162,6 +163,21 @@ public class CopycatBoardBlock extends WaterloggedMultiStateCopycatBlock impleme
     @Override
     public boolean isAcceptedRegardless(BlockState material) {
         return CopycatSpecialCases.isBarsMaterial(material);
+    }
+
+    @Nullable
+    @Override
+    public BlockState getAcceptedBlockState(Level level, BlockPos pos, ItemStack item, Direction face) {
+        BlockState material = super.getAcceptedBlockState(level, pos, item, face);
+        // only catwalks take bars, boards that already have them keep them
+        if (material != null && CopycatSpecialCases.isBarsMaterial(material) && !isCatwalk(level.getBlockState(pos)))
+            return null;
+        return material;
+    }
+
+    private boolean isCatwalk(BlockState state) {
+        return state.is(this) && state.getValue(DOWN)
+                && (state.getValue(NORTH) && state.getValue(SOUTH) || state.getValue(EAST) && state.getValue(WEST));
     }
 
     @Override
@@ -322,6 +338,11 @@ public class CopycatBoardBlock extends WaterloggedMultiStateCopycatBlock impleme
             case Y -> pos.y();
             case Z -> pos.z();
         };
+    }
+
+    // the floor is thinner than the 0.2 offset of Entity.getOnPosLegacy, this keeps it from reading the block below
+    public boolean collisionExtendsVertically(BlockState state, BlockGetter level, BlockPos pos, Entity collidingEntity) {
+        return true;
     }
 
     public boolean supportsExternalFaceHiding(BlockState state) {
