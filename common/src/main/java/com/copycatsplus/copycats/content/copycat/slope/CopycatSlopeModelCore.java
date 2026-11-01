@@ -3,9 +3,14 @@ package com.copycatsplus.copycats.content.copycat.slope;
 import com.copycatsplus.copycats.foundation.copycat.model.CopycatModelCore;
 import com.copycatsplus.copycats.foundation.copycat.model.assembly.CopycatRenderContext;
 import com.copycatsplus.copycats.foundation.copycat.model.assembly.AssemblyTransform;
+import com.copycatsplus.copycats.foundation.copycat.model.assembly.MutableVec3;
+import com.copycatsplus.copycats.foundation.copycat.model.assembly.MutableVertex;
+import com.copycatsplus.copycats.foundation.copycat.model.assembly.quad.QuadSlope;
+import com.copycatsplus.copycats.foundation.copycat.model.assembly.quad.QuadTransform;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Half;
+import net.minecraft.world.level.block.state.properties.StairsShape;
 
 import static com.copycatsplus.copycats.foundation.copycat.model.assembly.CopycatRenderContext.*;
 import static com.copycatsplus.copycats.foundation.copycat.model.assembly.MutableCullFace.*;
@@ -19,8 +24,52 @@ public class CopycatSlopeModelCore extends CopycatModelCore {
         Half half = state.getValue(CopycatSlopeBlock.HALF);
         int rot = (int) facing.toYRot();
         boolean flipY = half == Half.TOP;
-        AssemblyTransform transform = t -> t.flipY(flipY).rotateY(rot);
-        assembleSlope(context, transform, 0, 16, enhanced);
+        StairsShape shape = state.getValue(CopycatSlopeBlock.SHAPE);
+        boolean flipX = shape == StairsShape.INNER_RIGHT || shape == StairsShape.OUTER_RIGHT;
+        AssemblyTransform transform = t -> t.flipX(flipX).flipY(flipY).rotateY(rot);
+        switch (shape) {
+            case STRAIGHT -> assembleSlope(context, transform, 0, 16, enhanced);
+            case INNER_LEFT, INNER_RIGHT -> assembleCorner(context, transform, Math::max, 0);
+            case OUTER_LEFT, OUTER_RIGHT -> assembleCorner(context, transform, Math::min, NORTH | WEST);
+        }
+    }
+
+    /**
+     * Assembles a corner of two slopes meeting along the x = z diagonal. The surface height is max(x, z) for an inner
+     * corner and min(x, z) for an outer one, so each half of the surface is a flat triangle.
+     */
+    private static void assembleCorner(CopycatRenderContext context, AssemblyTransform transform, QuadSlope.QuadSlopeFunction height, int emptyFaces) {
+        context.assemblePiece(
+                transform,
+                vec3(0, 0, 0),
+                aabb(16, 16, 16),
+                cull(UP | emptyFaces),
+                updateUV(slope(Direction.UP, height))
+        );
+        for (boolean highX : new boolean[]{true, false}) {
+            context.assemblePiece(
+                    transform,
+                    vec3(0, 0, 0),
+                    aabb(16, 16, 16),
+                    cull(DOWN | NORTH | SOUTH | EAST | WEST),
+                    updateUV(clipToDiagonal(highX), slope(Direction.UP, height))
+            );
+        }
+    }
+
+    /**
+     * Moves vertices on the wrong side of the x = z diagonal onto it, leaving the part of the quad on the kept side.
+     */
+    private static QuadTransform clipToDiagonal(boolean keepHighX) {
+        return (quad, sprite) -> {
+            for (MutableVertex vertex : quad.vertices) {
+                MutableVec3 xyz = vertex.xyz;
+                if (keepHighX ? xyz.x < xyz.z : xyz.x > xyz.z) {
+                    xyz.x = xyz.z = (xyz.x + xyz.z) / 2;
+                }
+            }
+            return true;
+        };
     }
 
     public static void assembleSlope(CopycatRenderContext context, AssemblyTransform transform, double minHeight, double maxHeight, boolean enhanced) {

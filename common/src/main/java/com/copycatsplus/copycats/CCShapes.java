@@ -16,6 +16,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.Direction.Axis;
 import net.minecraft.world.level.block.state.properties.Half;
 import net.minecraft.world.level.block.state.properties.Property;
+import net.minecraft.world.level.block.state.properties.StairsShape;
 import net.minecraft.world.phys.shapes.BooleanOp;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
@@ -25,6 +26,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static com.copycatsplus.copycats.foundation.copycat.model.assembly.CopycatRenderContext.*;
 import static net.minecraft.world.level.block.state.properties.BlockStateProperties.*;
@@ -145,21 +147,63 @@ public class CCShapes {
                                     .flipX(side == Side.RIGHT)
             ));
     private static final int SLOPE_SUBDIVISIONS = 8;
-    public static final Map<Direction, Map<Half, MutableShape>> SLOPE =
-            forHorizontalDirections(forHalves(shape(
-                    IntStream.range(0, SLOPE_SUBDIVISIONS)
-                            .mapToObj(i -> aabb(16, (i + 1.0) / SLOPE_SUBDIVISIONS * 16.0, 16.0 / SLOPE_SUBDIVISIONS).move(0, 0, i * 16.0 / SLOPE_SUBDIVISIONS))
-                            .toArray(MutableAABB[]::new)
-            ).outline(
-                    line(vec3(0, 0, 0), vec3(16, 0, 0)),
-                    line(vec3(0, 0, 16), vec3(16, 0, 16)),
-                    line(vec3(0, 0, 0), vec3(0, 0, 16)),
-                    line(vec3(16, 0, 0), vec3(16, 0, 16)),
-                    line(vec3(0, 0, 16), vec3(0, 16, 16)),
-                    line(vec3(16, 0, 16), vec3(16, 16, 16)),
-                    line(vec3(0, 16, 16), vec3(16, 16, 16)),
-                    line(vec3(0, 0, 0), vec3(0, 16, 16)),
-                    line(vec3(16, 0, 0), vec3(16, 16, 16))
+    private static final double SLOPE_STEP = 16.0 / SLOPE_SUBDIVISIONS;
+    public static final Map<Direction, Map<Half, Map<StairsShape, MutableShape>>> SLOPE =
+            forHorizontalDirections(forHalves(forAll(STAIRS_SHAPE,
+                    slopeShape -> switch (slopeShape) {
+                        case STRAIGHT -> shape(
+                                IntStream.range(0, SLOPE_SUBDIVISIONS)
+                                        .mapToObj(i -> aabb(16, (i + 1.0) / SLOPE_SUBDIVISIONS * 16.0, 16.0 / SLOPE_SUBDIVISIONS).move(0, 0, i * 16.0 / SLOPE_SUBDIVISIONS))
+                                        .toArray(MutableAABB[]::new)
+                        ).outline(
+                                line(vec3(0, 0, 0), vec3(16, 0, 0)),
+                                line(vec3(0, 0, 16), vec3(16, 0, 16)),
+                                line(vec3(0, 0, 0), vec3(0, 0, 16)),
+                                line(vec3(16, 0, 0), vec3(16, 0, 16)),
+                                line(vec3(0, 0, 16), vec3(0, 16, 16)),
+                                line(vec3(16, 0, 16), vec3(16, 16, 16)),
+                                line(vec3(0, 16, 16), vec3(16, 16, 16)),
+                                line(vec3(0, 0, 0), vec3(0, 16, 16)),
+                                line(vec3(16, 0, 0), vec3(16, 16, 16))
+                        );
+                        // two straight slopes joined, rising to the south and east
+                        case INNER_LEFT, INNER_RIGHT -> shape(
+                                IntStream.range(0, SLOPE_SUBDIVISIONS).boxed()
+                                        .flatMap(i -> Stream.of(
+                                                aabb(16, (i + 1) * SLOPE_STEP, 16 - i * SLOPE_STEP).move(0, 0, i * SLOPE_STEP),
+                                                aabb(16 - i * SLOPE_STEP, (i + 1) * SLOPE_STEP, 16).move(i * SLOPE_STEP, 0, 0)
+                                        ))
+                                        .toArray(MutableAABB[]::new)
+                        ).outline(
+                                line(vec3(0, 0, 0), vec3(16, 0, 0)),
+                                line(vec3(0, 0, 16), vec3(16, 0, 16)),
+                                line(vec3(0, 0, 0), vec3(0, 0, 16)),
+                                line(vec3(16, 0, 0), vec3(16, 0, 16)),
+                                line(vec3(16, 0, 0), vec3(16, 16, 0)),
+                                line(vec3(0, 0, 16), vec3(0, 16, 16)),
+                                line(vec3(16, 0, 16), vec3(16, 16, 16)),
+                                line(vec3(16, 16, 0), vec3(16, 16, 16)),
+                                line(vec3(0, 16, 16), vec3(16, 16, 16)),
+                                line(vec3(0, 0, 0), vec3(16, 16, 0)),
+                                line(vec3(0, 0, 0), vec3(0, 16, 16)),
+                                line(vec3(0, 0, 0), vec3(16, 16, 16))
+                        ).flipX(slopeShape == StairsShape.INNER_RIGHT);
+                        // the overlap of those two slopes, peaking at the south-east corner
+                        case OUTER_LEFT, OUTER_RIGHT -> shape(
+                                IntStream.range(0, SLOPE_SUBDIVISIONS)
+                                        .mapToObj(i -> aabb(16 - i * SLOPE_STEP, (i + 1) * SLOPE_STEP, 16 - i * SLOPE_STEP).move(i * SLOPE_STEP, 0, i * SLOPE_STEP))
+                                        .toArray(MutableAABB[]::new)
+                        ).outline(
+                                line(vec3(0, 0, 0), vec3(16, 0, 0)),
+                                line(vec3(0, 0, 16), vec3(16, 0, 16)),
+                                line(vec3(0, 0, 0), vec3(0, 0, 16)),
+                                line(vec3(16, 0, 0), vec3(16, 0, 16)),
+                                line(vec3(16, 0, 16), vec3(16, 16, 16)),
+                                line(vec3(0, 0, 16), vec3(16, 16, 16)),
+                                line(vec3(16, 0, 0), vec3(16, 16, 16)),
+                                line(vec3(0, 0, 0), vec3(16, 16, 16))
+                        ).flipX(slopeShape == StairsShape.OUTER_RIGHT);
+                    }
             )));
     public static final Map<Direction, MutableShape> VERTICAL_SLOPE =
             forHorizontalDirections(shape(
