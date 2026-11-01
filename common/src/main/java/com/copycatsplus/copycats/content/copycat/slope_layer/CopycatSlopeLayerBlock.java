@@ -110,9 +110,9 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
             return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
         int count = stack.getCount();
         ItemInteractionResult result = InteractionUtils.usePlacementHelper(placementHelperId, stack, state, level, pos, player, hand, hitResult);
-        // the helper only takes one item
-        if (run != null && stack.getCount() < count)
-            stack.shrink(getItemCost(run.layers()) - 1);
+        // the helper only takes one item, a piece along the ridge copies the clicked one
+        if (stack.getCount() < count)
+            stack.shrink(getItemCost(run != null ? run.layers() : state.getValue(LAYERS)) - 1);
         return result;
     }
 
@@ -551,10 +551,12 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
                 return PlacementOffset.success(run.pos(), s -> withCornerShape(copyOrientation(s, state).setValue(FACING, run.facing()).setValue(LAYERS, run.layers()), world, run.pos()));
             if (canStack(state, ray.getDirection()))
                 return PlacementOffset.fail();
-            // one item buys one layer, so LAYERS stays at its default
+            int layers = state.getValue(LAYERS);
+            if (!canAfford(player, held, layers))
+                return PlacementOffset.fail();
             PlacementOffset offset = super.getOffset(player, world, state, pos, ray);
             BlockPos newPos = offset.getBlockPos();
-            return offset.withTransform(s -> withCornerShape(copyOrientation(s, state), world, newPos));
+            return offset.withTransform(s -> withCornerShape(copyOrientation(s, state).setValue(LAYERS, layers), world, newPos));
         }
 
     }
