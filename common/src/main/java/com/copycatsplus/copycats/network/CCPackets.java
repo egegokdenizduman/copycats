@@ -13,7 +13,8 @@ import java.util.Locale;
 
 public enum CCPackets implements BasePacketPayload.PacketTypeProvider {
     CONFIG_SYNC(ConfigSyncPacket.class, ConfigSyncPacket.STREAM_CODEC),
-    FILL_COPYCAT(FillCopycatPacket.class, FillCopycatPacket.STREAM_CODEC)
+    FILL_COPYCAT(FillCopycatPacket.class, FillCopycatPacket.STREAM_CODEC),
+    SWAP_SHAPE_VARIANT(SwapShapeVariantPacket.class, SwapShapeVariantPacket.STREAM_CODEC)
     ;
 /*    //TODO: Increase version on updates
     public static final PacketSystem;PACKETS = PacketSystem.builder(Copycats.MODID, 2)
@@ -42,7 +43,7 @@ public enum CCPackets implements BasePacketPayload.PacketTypeProvider {
     }
 
     public static void register() {
-        CatnipPacketRegistry packetRegistry = new CatnipPacketRegistry(Copycats.MODID, 3);
+        CatnipPacketRegistry packetRegistry = new CatnipPacketRegistry(Copycats.MODID, 4);
         for (CCPackets packet : CCPackets.values()) {
             packetRegistry.registerPacket(packet.type);
         }

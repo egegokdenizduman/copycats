@@ -1,5 +1,7 @@
 {
   "itemGroup.copycats.main": "Create: Copycats+ | Decorative",
   "itemGroup.copycats.functional": "Create: Copycats+ | Functional",
-  "keyinfo.copycats.fill_copycat": "Fill Copycat with Material"
+  "copycats.gui.vertical_slope_layer": "Copycat Vertical Slope Layer",
+  "keyinfo.copycats.fill_copycat": "Fill Copycat with Material",
+  "keyinfo.copycats.shape_variant_menu": "Shape Variant Menu"
 }

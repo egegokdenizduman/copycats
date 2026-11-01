@@ -10,6 +10,7 @@ import org.lwjgl.glfw.GLFW;
 public enum CCKeys {
 
     FILL_COPYCAT("fill_copycat", GLFW.GLFW_KEY_LEFT_ALT),
+    SHAPE_VARIANT_MENU("shape_variant_menu", GLFW.GLFW_KEY_LEFT_ALT),
 
     ;
 
