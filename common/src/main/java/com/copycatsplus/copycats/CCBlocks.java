@@ -59,6 +59,8 @@ import com.copycatsplus.copycats.content.copycat.layer.CopycatLayerModelCore;
 import com.copycatsplus.copycats.content.copycat.pressure_plate.CopycatPressurePlateBlock;
 import com.copycatsplus.copycats.content.copycat.pressure_plate.CopycatPressurePlateModelCore;
 import com.copycatsplus.copycats.content.copycat.pressure_plate.CopycatWeightedPressurePlate;
+import com.copycatsplus.copycats.content.copycat.redstone_link.CopycatEncasedRedstoneLinkBlock;
+import com.copycatsplus.copycats.content.copycat.redstone_link.CopycatEncasedRedstoneLinkModelCore;
 import com.copycatsplus.copycats.content.copycat.shaft.CopycatShaftBlock;
 import com.copycatsplus.copycats.content.copycat.slab.CopycatMultiSlabModelCore;
 import com.copycatsplus.copycats.content.copycat.slab.CopycatSlabBlock;
@@ -88,6 +90,7 @@ import com.copycatsplus.copycats.datagen.CCLootGen;
 import com.copycatsplus.copycats.foundation.tooltip.CopycatCharacteristics;
 import com.copycatsplus.copycats.foundation.tooltip.CopycatDescription;
 import com.copycatsplus.copycats.utility.Platform;
+import com.simibubi.create.AllBlocks;
 import com.simibubi.create.AllTags;
 import com.simibubi.create.content.contraptions.behaviour.DoorMovingInteraction;
 import com.simibubi.create.content.decoration.slidingDoor.SlidingDoorMovementBehaviour;
@@ -111,6 +114,9 @@ import net.minecraft.world.level.block.PressurePlateBlock;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.properties.BlockSetType;
 import net.minecraft.world.level.material.MapColor;
+import net.minecraft.world.level.storage.loot.LootPool;
+import net.minecraft.world.level.storage.loot.entries.LootItem;
+import net.minecraft.world.level.storage.loot.predicates.ExplosionCondition;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -834,6 +840,18 @@ public class CCBlocks {
                             CopycatCharacteristics.CT_TOGGLE
                     ))
                     .transform(customItemModel("copycat_base", "flat_pane"))
+                    .register();
+
+    public static final BlockEntry<CopycatEncasedRedstoneLinkBlock> COPYCAT_ENCASED_REDSTONE_LINK =
+            REGISTRATE.block("copycat_encased_redstone_link", CopycatEncasedRedstoneLinkBlock::new)
+                    .transform(CCBuilderTransformers.copycat())
+                    .blockstate((c, p) -> p.directionalBlock(c.get(), state -> p.models().getExistingFile(
+                            p.modLoc("block/encased_redstone_link/insert" + (state.getValue(CopycatEncasedRedstoneLinkBlock.POWERED) ? "_powered" : "")))))
+                    .tag(AllTags.AllBlockTags.BRITTLE.tag, AllTags.AllBlockTags.SAFE_NBT.tag)
+                    .loot((t, b) -> t.add(b, t.createSingleItemTable(AllBlocks.REDSTONE_LINK.get())
+                            .withPool(LootPool.lootPool().when(ExplosionCondition.survivesExplosion())
+                                    .add(LootItem.lootTableItem(AllBlocks.COPYCAT_PANEL.get())))))
+                    .onRegister(onClient(() -> createBlockModel(CopycatEncasedRedstoneLinkModelCore::new)))
                     .register();
 
     @ExpectPlatform

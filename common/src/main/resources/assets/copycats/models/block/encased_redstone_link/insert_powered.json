@@ -1,0 +1,8 @@
+{
+  "parent": "copycats:block/encased_redstone_link/insert",
+  "render_type": "minecraft:solid",
+  "textures": {
+    "particle": "create:block/redstone_bridge_powered",
+    "redstone_bridge": "create:block/redstone_bridge_powered"
+  }
+}

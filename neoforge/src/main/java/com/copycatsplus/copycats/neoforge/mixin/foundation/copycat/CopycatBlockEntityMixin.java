@@ -6,6 +6,7 @@ import com.copycatsplus.copycats.foundation.copycat.ICopycatBlockEntity;
 import com.copycatsplus.copycats.foundation.copycat.model.neoforge.CopycatModelNeoForge;
 import com.copycatsplus.copycats.content.copycat.fluid_pipe.CopycatFluidPipeBlockEntity;
 import com.copycatsplus.copycats.content.copycat.fluid_pipe.CopycatStraightPipeBlockEntity;
+import com.copycatsplus.copycats.content.copycat.redstone_link.CopycatEncasedRedstoneLinkBlockEntity;
 import com.copycatsplus.copycats.content.copycat.shaft.CopycatShaftBlockEntity;
 import com.copycatsplus.copycats.utility.neoforge.ModelDataUtils;
 import com.simibubi.create.foundation.blockEntity.SmartBlockEntity;
@@ -27,7 +28,8 @@ import org.spongepowered.asm.mixin.Unique;
         CopycatFluidPipeBlockEntity.class,
         CopycatStraightPipeBlockEntity.class,
         CopycatShaftBlockEntity.class,
-        CopycatSlidingDoorBlockEntity.class
+        CopycatSlidingDoorBlockEntity.class,
+        CopycatEncasedRedstoneLinkBlockEntity.class
 })
 public abstract class CopycatBlockEntityMixin extends SmartBlockEntity implements ICopycatBlockEntity {
 

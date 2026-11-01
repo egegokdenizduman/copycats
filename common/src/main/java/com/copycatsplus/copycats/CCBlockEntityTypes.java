@@ -11,10 +11,12 @@ import com.copycatsplus.copycats.content.copycat.fluid_pipe.CopycatFluidPipeBloc
 import com.copycatsplus.copycats.content.copycat.fluid_pipe.CopycatFluidPipeRenderer;
 import com.copycatsplus.copycats.content.copycat.fluid_pipe.CopycatStraightPipeBlockEntity;
 import com.copycatsplus.copycats.content.copycat.ladder.MultiStateCopycatLadderBlockEntity;
+import com.copycatsplus.copycats.content.copycat.redstone_link.CopycatEncasedRedstoneLinkBlockEntity;
 import com.copycatsplus.copycats.content.copycat.shaft.CopycatShaftBlockEntity;
 import com.copycatsplus.copycats.content.copycat.shaft.CopycatShaftVisual;
 import com.copycatsplus.copycats.content.copycat.shaft.CopycatShaftRenderer;
 import com.simibubi.create.content.fluids.pipes.TransparentStraightPipeRenderer;
+import com.simibubi.create.foundation.blockEntity.renderer.SmartBlockEntityRenderer;
 import com.simibubi.create.foundation.data.CreateRegistrate;
 import com.tterrag.registrate.util.entry.BlockEntityEntry;
 
@@ -105,6 +107,12 @@ public class CCBlockEntityTypes {
             REGISTRATE.blockEntity("copycat_sliding_door", CopycatSlidingDoorBlockEntity::new)
                     .validBlocks(CCBlocks.COPYCAT_SLIDING_DOOR, CCBlocks.COPYCAT_FOLDING_DOOR)
                     .renderer(() -> CopycatSlidingDoorRenderer::new)
+                    .register();
+
+    public static final BlockEntityEntry<? extends CopycatEncasedRedstoneLinkBlockEntity> COPYCAT_ENCASED_REDSTONE_LINK =
+            REGISTRATE.blockEntity("copycat_encased_redstone_link", CopycatEncasedRedstoneLinkBlockEntity::new)
+                    .validBlocks(CCBlocks.COPYCAT_ENCASED_REDSTONE_LINK)
+                    .renderer(() -> SmartBlockEntityRenderer::new)
                     .register();
 
     public static void register() {

@@ -224,7 +224,8 @@ public class CCStandardRecipes extends CopycatsRecipeProvider {
 
     Set<RegistryEntry<? extends Block, ?>> blocksWithoutRecipe = Set.of(
             CCBlocks.COPYCAT_BASE,
-            CCBlocks.COPYCAT_GLASS_FLUID_PIPE
+            CCBlocks.COPYCAT_GLASS_FLUID_PIPE,
+            CCBlocks.COPYCAT_ENCASED_REDSTONE_LINK
     );
 
     String currentFolder = "";
