@@ -228,7 +228,8 @@ public class CopycatModelNeoForge extends BakedModelWrapperWithData {
             if (entry.type().onlyWhenVirtual() && !isVirtual)
                 continue;
             if (entry.type().useCopycatLogic() && material == null) {
-                if (materials.isEmpty() && isVirtual) {
+                // A new block entity has no model data until its onLoad, which can be after the first mesh
+                if (materials.isEmpty() && state != null) {
                     material = AllBlocks.COPYCAT_BASE.getDefaultState();
                 } else continue;
             }

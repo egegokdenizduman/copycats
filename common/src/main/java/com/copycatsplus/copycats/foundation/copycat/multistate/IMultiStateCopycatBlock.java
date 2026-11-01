@@ -356,8 +356,6 @@ public interface IMultiStateCopycatBlock extends ICopycatBlock, IStateType {
                 break;
             }
         }
-        //TODO: Figure out why sometimes the blocks when placed with the placement helper dont render so we can remove this
-        BlockEntityUtils.redraw((BlockEntity) copycatBE);
     }
 
     /**
