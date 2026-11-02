@@ -219,11 +219,11 @@ public class CopycatModelNeoForge extends BakedModelWrapperWithData {
         Map<Direction, List<AABB>> regions = BlockFaceUtils.getPartialEdgeRegions(world, pos, state, material);
         if (regions.isEmpty())
             return null;
-        CopycatExternalContext.setConnectPartialEdges(true);
+        CopycatExternalContext.setPartialEdgeFaces(regions.keySet());
         try {
             return new PartialEdgeData(getModelOf(material).getModelData(filteredWorld, pos, material, ModelData.EMPTY), regions);
         } finally {
-            CopycatExternalContext.setConnectPartialEdges(false);
+            CopycatExternalContext.setPartialEdgeFaces(null);
         }
     }
 

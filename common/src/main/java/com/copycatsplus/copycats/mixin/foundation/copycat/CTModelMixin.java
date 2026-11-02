@@ -1,11 +1,17 @@
 package com.copycatsplus.copycats.mixin.foundation.copycat;
 
 import com.copycatsplus.copycats.CCBlocks;
+import com.copycatsplus.copycats.foundation.copycat.CopycatExternalContext;
 import com.copycatsplus.copycats.foundation.copycat.ICopycatBlock;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.simibubi.create.content.decoration.copycat.CopycatBlock;
 import com.simibubi.create.foundation.block.connected.CTModel;
+import com.simibubi.create.foundation.block.connected.CTType;
+import com.simibubi.create.foundation.block.connected.ConnectedTextureBehaviour;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
@@ -26,5 +32,16 @@ public class CTModelMixin {
             return CCBlocks.WRAPPED_COPYCAT.get();
         }
         return original.call(instance);
+    }
+
+    @WrapOperation(
+            method = "createCTData",
+            at = @At(value = "INVOKE", target = "Lcom/simibubi/create/foundation/block/connected/ConnectedTextureBehaviour;getDataType(Lnet/minecraft/world/level/BlockAndTintGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/Direction;)Lcom/simibubi/create/foundation/block/connected/CTType;")
+    )
+    private CTType skipFacesWithoutPartialEdges(ConnectedTextureBehaviour instance, BlockAndTintGetter world, BlockPos pos, BlockState state, Direction face, Operation<CTType> original) {
+        // Only faces with partial edge regions read the second result
+        if (CopycatExternalContext.skipsPartialEdgeFace(face))
+            return null;
+        return original.call(instance, world, pos, state, face);
     }
 }

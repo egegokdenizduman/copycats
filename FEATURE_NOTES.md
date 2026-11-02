@@ -49,6 +49,22 @@ Done in `BlockFaceUtils`. All 23 copycat shape overrides depend on state only (l
 
   Casing slopes went from about 320 to about 200 µs per block. Whole meshing with casing slopes in view went from 10.6–11.1 s to 8.7–9.5 s (empty control 5.8–6.2 s). The second CT build (`gatherPartialEdges`) is still about 1.25 s of L's 3.0 s.
 
+### Step 2 result (Nov 2)
+
+`CopycatExternalContext` holds the faces with regions, in place of the old boolean, while `gatherPartialEdges` runs. `CTModelMixin` returns no CT type for the other faces. `PartialEdgeQuads.merge` reads the second result only for quads whose direction has regions, and Create indexes `CTData` by the same direction, so nothing else reads those faces.
+
+- Output: same scene, identical hashes to the old code.
+- `gatherPartialEdges` in L went from 1159–1318 to 503–593 ms. In M it was already 125–178 ms after step 1 and stays there.
+
+| Area | Baseline (ms) | Step 1 (ms) | Step 2 (ms) |
+|---|---|---|---|
+| S slope, smooth stone | 292–356 | 300–329 | 322–331 |
+| K corner, smooth stone | 906–1203 | 1102–1175 | 1057–1121 |
+| M corner, andesite casing | 3526–3570 | 2149–2329 | 2152–2397 |
+| L slope, andesite casing | 4620–4978 | 2874–3176 | 2164–2279 |
+
+Casing slopes went from about 320 to about 148 µs per block overall. Whole meshing with them in view went from 10.6–11.1 s to 8.1–8.3 s (empty control 5.7–6.2 s).
+
 ### Out of scope
 
 - Plain-material corners (`assembleCorner`, about 70 µs per block, all `getQuads`). That is what the dropped quad cache would have covered. It can come back later if corners matter.

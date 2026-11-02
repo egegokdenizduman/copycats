@@ -1,6 +1,10 @@
 package com.copycatsplus.copycats.foundation.copycat;
 
+import net.minecraft.core.Direction;
 import org.jetbrains.annotations.ApiStatus;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.Set;
 
 /**
  * Stores additional context when rendering copycats.
@@ -27,16 +31,24 @@ public class CopycatExternalContext {
 
     /**
      * Used while building the second connected texture result of a copycat, in which flush faces also connect along
-     * edges that only partly overlap.
+     * edges that only partly overlap. Holds the faces that use that result, null otherwise.
      */
-    private static final ThreadLocal<Boolean> connectPartialEdges = ThreadLocal.withInitial(() -> false);
+    private static final ThreadLocal<Set<Direction>> partialEdgeFaces = new ThreadLocal<>();
 
-    public static void setConnectPartialEdges(boolean value) {
-        connectPartialEdges.set(value);
+    public static void setPartialEdgeFaces(@Nullable Set<Direction> faces) {
+        partialEdgeFaces.set(faces);
     }
 
     public static boolean shouldConnectPartialEdges() {
-        return connectPartialEdges.get();
+        return partialEdgeFaces.get() != null;
+    }
+
+    /**
+     * Whether the second connected texture result can leave out this face, because no partial edge uses it.
+     */
+    public static boolean skipsPartialEdgeFace(Direction face) {
+        Set<Direction> faces = partialEdgeFaces.get();
+        return faces != null && !faces.contains(face);
     }
 
     public static void setPropertyForBlockColor(String property) {
