@@ -23,6 +23,7 @@ import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiFunction;
 
 import static com.copycatsplus.copycats.utility.MathUtils.*;
@@ -46,6 +47,44 @@ public class BlockFaceUtils {
     private static final double EDGE_EPSILON = 1e-5;
 
     public static record ShapeKey(VoxelShape fromShape, VoxelShape toShape) {
+    }
+
+    // Copycats use noOcclusion, so vanilla keeps no face shapes for them and each lookup made new shapes,
+    // which SHAPE_OP_CACHE never matched. Their shapes depend on the state only.
+    private static final Map<BlockState, StateShapes> STATE_SHAPES = new ConcurrentHashMap<>();
+
+    private record StateShapes(VoxelShape[] faces, VoxelShape[] trimmedFaces, VoxelShape[] edges) {
+    }
+
+    private static boolean hasStateShapes(BlockState state) {
+        return state.getBlock() instanceof ICopycatBlock && !(state.getBlock() instanceof IMultiStateCopycatBlock);
+    }
+
+    private static StateShapes getStateShapes(BlockGetter level, BlockState state, BlockPos pos) {
+        // get first: computeIfAbsent locks the bin, and all meshing threads ask for the same few states
+        StateShapes shapes = STATE_SHAPES.get(state);
+        if (shapes != null) return shapes;
+        VoxelShape[] faces = new VoxelShape[6];
+        VoxelShape[] trimmedFaces = new VoxelShape[6];
+        VoxelShape[] edges = new VoxelShape[36];
+        for (Direction side : Direction.values()) {
+            faces[side.ordinal()] = state.getFaceOcclusionShape(level, pos, side);
+            trimmedFaces[side.ordinal()] = Shapes.join(faces[side.ordinal()], Shapes.block(), BooleanOp.AND);
+        }
+        for (Direction side : Direction.values()) {
+            for (Direction textureFace : Direction.values()) {
+                edges[side.ordinal() * 6 + textureFace.ordinal()] = Shapes.join(faces[side.ordinal()], FACE_BANDS[textureFace.ordinal()], BooleanOp.AND);
+            }
+        }
+        shapes = new StateShapes(faces, trimmedFaces, edges);
+        StateShapes existing = STATE_SHAPES.putIfAbsent(state, shapes);
+        return existing != null ? existing : shapes;
+    }
+
+    private static VoxelShape getFaceShape(BlockGetter level, BlockState state, BlockPos pos, Direction face) {
+        if (hasStateShapes(state))
+            return getStateShapes(level, state, pos).faces()[face.ordinal()];
+        return state.getFaceOcclusionShape(level, pos, face);
     }
 
     private static boolean invokeCachedOperation(BiFunction<VoxelShape, VoxelShape, Boolean> operation, VoxelShape fromShape, VoxelShape toShape) {
@@ -94,7 +133,7 @@ public class BlockFaceUtils {
             }
         }
         if (fromShape == null) {
-            fromShape = fromState.getFaceOcclusionShape(level, fromPos, fromFace);
+            fromShape = getFaceShape(level, fromState, fromPos, fromFace);
         }
         if (fromShape.isEmpty()) {
             return false;
@@ -152,7 +191,7 @@ public class BlockFaceUtils {
             }
         }
         if (toShape == null) {
-            toShape = toState.getFaceOcclusionShape(level, toPos, fromFace.getOpposite());
+            toShape = getFaceShape(level, toState, toPos, fromFace.getOpposite());
         }
         CopycatExternalContext.setPropertyForAppearance(null);
         return invokeCachedOperation(operation, fromShape, toShape);
@@ -261,7 +300,9 @@ public class BlockFaceUtils {
         if (edge.isEmpty()) return false;
         Axis along = remainingAxis(side.getAxis(), textureFace.getAxis());
         // a face's slice shape reports the bounds of the whole block, so measure the joined shape
-        VoxelShape faceShape = Shapes.join(state.getFaceOcclusionShape(level, pos, textureFace), Shapes.block(), BooleanOp.AND);
+        VoxelShape faceShape = hasStateShapes(state)
+                ? getStateShapes(level, state, pos).trimmedFaces()[textureFace.ordinal()]
+                : Shapes.join(state.getFaceOcclusionShape(level, pos, textureFace), Shapes.block(), BooleanOp.AND);
         return edge.min(along) > faceShape.min(along) + EDGE_EPSILON || edge.max(along) < faceShape.max(along) - EDGE_EPSILON;
     }
 
@@ -271,6 +312,8 @@ public class BlockFaceUtils {
     }
 
     private static VoxelShape getEdge(BlockGetter level, BlockState state, BlockPos pos, Direction side, Direction textureFace) {
+        if (hasStateShapes(state))
+            return getStateShapes(level, state, pos).edges()[side.ordinal() * 6 + textureFace.ordinal()];
         return Shapes.join(state.getFaceOcclusionShape(level, pos, side), FACE_BANDS[textureFace.ordinal()], BooleanOp.AND);
     }
 
