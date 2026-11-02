@@ -60,12 +60,51 @@ Top copycat methods under meshing, inclusive, summed over the trial and runs 1 t
 
 Sodium calls `gatherModelData` from the builder threads (`BakedModelWrapperWithData.getModelData`). `gatherModelData` is 56 to 75% of the copycat meshing time, and nearly all of that is occlusion data (`gatherOcclusionData` → `hidesNeighborFace`). Building quads (`getQuads`) is 22 to 42%.
 
+### Other shapes and a CT material (second session, same night)
+
+Same setup, code and settings. Each launch places every area below and profiles them in a rotated order. Two sets of three launches; every area is in one set except S and C, which are in both. Steam 'n' Rails isn't in the dev run, so Create's andesite casing stands in for locometal as the CT material.
+
+- S: `copycat_slope[facing=north,shape=straight]`, smooth stone (rows of straight slopes).
+- T: `copycat_stairs[facing=north,shape=straight]`, smooth stone.
+- K: `copycat_slope`, all `outer_left`, smooth stone. `/fill` recomputes slope shapes from neighbours, so K is a pinwheel of 2 by 2 tiles, each slope facing the next one counterclockwise, set by hand and spread with `/clone`. The log checked `shape=outer_left` at the centre and both far corners.
+- L: as S with `create:andesite_casing` (CT on).
+- M: as K with `create:andesite_casing`.
+
+Copycat methods inside meshing per profile (15,000 block meshes), range over three launches:
+
+| Area | Copycat time (ms) | Per block (µs CPU) | `getQuads` (ms) | `gatherModelData` (ms) | Meshing over empty C (s) |
+|---|---|---|---|---|---|
+| A slab, smooth stone (this session) | 405–502 | 27–33 | 78–94 | 307–406 | 0.2–0.6 |
+| S slope, smooth stone | 284–356 | 19–24 | 231–279 | 48–66 | 0.2–0.7 |
+| T stairs, smooth stone | 268–326 | 18–22 | 202–271 | 51–61 | 0.0–0.5 |
+| K corner slope, smooth stone | 906–1203 | 60–80 | 846–1096 | 55–96 | 0.7–1.5 |
+| L slope, andesite casing | 4620–4978 | 308–332 | 549–670 | 3990–4357 | 4.5–5.1 |
+| M corner slope, andesite casing | 3526–3570 | 235–238 | 1079–1249 | 2263–2440 | 3.5–3.8 |
+
+The empty control C took 5.98 to 6.22 s across the six launches. With casing slopes in view, whole meshing goes up to about 10.6–11.1 s, about 1.75 times the empty control.
+
+- Plain materials are cheap except on corners. Slopes and stairs cost about 20 µs per block, mostly `getQuads`. Corners cost three to four times that: `CopycatSlopeModelCore.assembleCorner` → `assembleTriangularSlope`.
+- The slab's cost in the first session is mostly occlusion data. That path is the multi-state slab's own (`CopycatSlabBlock.hidesNeighborFace`). Slopes and stairs spend only about 50–100 ms there.
+- CT materials are where the time goes, about 10 to 16 times a plain slope. Under L's `gatherModelData`, averaged per profile:
+
+| ms | Method |
+|---|---|
+| 2583 | `CopycatModelNeoForge.gatherPartialEdges` |
+| 2151 | `BlockFaceUtils.getEdge` |
+| 1925 | `ICopycatBlock.checkConnection` |
+| 1642 | `ICopycatBlock.getAppearance` (`CCCopycatBlock`) |
+| 1609 | `CopycatSlopeBlock.isIgnoredConnectivitySide` |
+| 1364 | `BlockFaceUtils.edgeMatch` |
+| 1226 | `BlockFaceUtils.getPartialEdgeRegions` |
+
+  Inclusive times overlap, so they don't add up. `gatherPartialEdges`, the fork's partial edge CT, is over half of L's copycat time and about 40% of M's.
+
 ### Not covered
 
 - No run without Sodium: Iris is on the dev runtime and needs Sodium.
 - Shaders were off.
-- Connected-texture materials: smooth stone has none, so `CopycatExternalContext` and CT lookups barely show up.
-- Only the slab and only one material. Shapes with more cropping (slopes, stairs, corners) were not measured.
+- Locometal itself (Steam 'n' Rails isn't in the dev run), CT off on a CT material, inner corners, slope layers, vertical forms.
+- Mixed builds: each area is one shape and one material, so CT connections only meet copies of the same block.
 - Contraption assembly and rendering.
 - The Java sampler has safepoint bias. 1 ms samples over about 0.7 s of copycat time are a few hundred samples per method row.
 - The window wasn't watched. The frame rate in the background window and the GPU upload were not checked.
