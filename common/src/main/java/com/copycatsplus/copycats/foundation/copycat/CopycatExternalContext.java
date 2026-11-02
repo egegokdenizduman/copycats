@@ -25,6 +25,20 @@ public class CopycatExternalContext {
      */
     private static final ThreadLocal<Boolean> forBlockingLogic = ThreadLocal.withInitial(() -> false);
 
+    /**
+     * Used while building the second connected texture result of a copycat, in which flush faces also connect along
+     * edges that only partly overlap.
+     */
+    private static final ThreadLocal<Boolean> connectPartialEdges = ThreadLocal.withInitial(() -> false);
+
+    public static void setConnectPartialEdges(boolean value) {
+        connectPartialEdges.set(value);
+    }
+
+    public static boolean shouldConnectPartialEdges() {
+        return connectPartialEdges.get();
+    }
+
     public static void setPropertyForBlockColor(String property) {
         propertyForBlockColor.set(property);
     }
