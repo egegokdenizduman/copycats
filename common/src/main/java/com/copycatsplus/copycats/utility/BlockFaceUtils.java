@@ -281,9 +281,24 @@ public class BlockFaceUtils {
                 // Where the edge carries on past the neighbour, the border stays long enough to meet the neighbour's border
                 double min = overlap.min(along) > edge.min(along) + EDGE_EPSILON ? overlap.min(along) + BORDER : overlap.min(along);
                 double max = overlap.max(along) < edge.max(along) - EDGE_EPSILON ? overlap.max(along) - BORDER : overlap.max(along);
+                // Borders of the L's step are cut from the sides along the edge, so they keep the normal texture where
+                // those sides only connect in the second result
+                boolean lowStays = notched && connectsNotched(level, state, pos, material, Direction.fromAxisAndDirection(along, Direction.AxisDirection.NEGATIVE), face);
+                boolean highStays = notched && connectsNotched(level, state, pos, material, Direction.fromAxisAndDirection(along, Direction.AxisDirection.POSITIVE), face);
+                if (lowStays || highStays) {
+                    VoxelShape faceShape = getTrimmedFace(level, state, pos, face);
+                    if (lowStays && edge.min(along) > faceShape.min(along) + EDGE_EPSILON)
+                        min = Math.max(min, edge.min(along) + BORDER);
+                    if (highStays && edge.max(along) < faceShape.max(along) - EDGE_EPSILON)
+                        max = Math.min(max, edge.max(along) - BORDER);
+                }
                 if (max - min < EDGE_EPSILON) continue;
-                regions.computeIfAbsent(face, f -> new ArrayList<>())
-                        .add(getSeamRegion(side, face, along, min, max, notched ? 0.5 - BORDER : 0.5));
+                List<AABB> faceRegions = regions.computeIfAbsent(face, f -> new ArrayList<>());
+                faceRegions.add(getSeamRegion(side, face, along, min, max, notched ? 0.5 - BORDER : 0.5, false));
+                // The lower step of the L lies inside the block, so it only connects where the whole sides match
+                if (notched && !Shapes.joinIsNotEmpty(getFaceShape(level, state, pos, side),
+                        getFaceShape(level, neighbour, neighbourPos, side.getOpposite()), BooleanOp.NOT_SAME))
+                    faceRegions.add(getSeamRegion(side, face, along, lowStays ? BORDER : 0, highStays ? 1 - BORDER : 1, 0.5 - BORDER, true));
             }
         }
         return regions;
@@ -299,11 +314,26 @@ public class BlockFaceUtils {
         VoxelShape edge = getEdge(level, state, pos, side, textureFace);
         if (edge.isEmpty()) return false;
         Axis along = remainingAxis(side.getAxis(), textureFace.getAxis());
-        // a face's slice shape reports the bounds of the whole block, so measure the joined shape
-        VoxelShape faceShape = hasStateShapes(state)
-                ? getStateShapes(level, state, pos).trimmedFaces()[textureFace.ordinal()]
-                : Shapes.join(state.getFaceOcclusionShape(level, pos, textureFace), Shapes.block(), BooleanOp.AND);
+        VoxelShape faceShape = getTrimmedFace(level, state, pos, textureFace);
         return edge.min(along) > faceShape.min(along) + EDGE_EPSILON || edge.max(along) < faceShape.max(along) - EDGE_EPSILON;
+    }
+
+    /**
+     * Whether a notched side connects only in the second connected texture result, where edges that partly meet connect.
+     */
+    private static boolean connectsNotched(BlockGetter level, BlockState state, BlockPos pos, BlockState material, Direction side, Direction textureFace) {
+        if (!isNotchedEdge(level, state, pos, side, textureFace)) return false;
+        BlockPos neighbourPos = pos.relative(side);
+        BlockState neighbour = level.getBlockState(neighbourPos);
+        return canCompareEdges(state, neighbour) && ICopycatBlock.getMaterial(level, neighbourPos).is(material.getBlock())
+                && Shapes.joinIsNotEmpty(getEdge(level, state, pos, side, textureFace), getEdge(level, neighbour, neighbourPos, side.getOpposite(), textureFace), BooleanOp.AND);
+    }
+
+    private static VoxelShape getTrimmedFace(BlockGetter level, BlockState state, BlockPos pos, Direction face) {
+        // a face's slice shape reports the bounds of the whole block, so measure the joined shape
+        return hasStateShapes(state)
+                ? getStateShapes(level, state, pos).trimmedFaces()[face.ordinal()]
+                : Shapes.join(state.getFaceOcclusionShape(level, pos, face), Shapes.block(), BooleanOp.AND);
     }
 
     private static boolean canCompareEdges(BlockState fromState, BlockState toState) {
@@ -324,7 +354,10 @@ public class BlockFaceUtils {
         throw new IllegalArgumentException("Axes must differ");
     }
 
-    private static AABB getSeamRegion(Direction side, Direction face, Axis along, double min, double max, double depth) {
+    /**
+     * @param inner Whether the region holds the quads inside the block instead of those on its outermost pixel.
+     */
+    private static AABB getSeamRegion(Direction side, Direction face, Axis along, double min, double max, double depth, boolean inner) {
         double[] lower = new double[3];
         double[] upper = new double[3];
         for (Axis axis : Axis.values()) {
@@ -333,8 +366,9 @@ public class BlockFaceUtils {
                 lower[i] = side.getAxisDirection() == Direction.AxisDirection.POSITIVE ? 1 - depth : 0;
                 upper[i] = lower[i] + depth;
             } else if (axis == face.getAxis()) {
-                lower[i] = face.getAxisDirection() == Direction.AxisDirection.POSITIVE ? 15 / 16.0 : 0;
-                upper[i] = lower[i] + 1 / 16.0;
+                boolean positive = face.getAxisDirection() == Direction.AxisDirection.POSITIVE;
+                lower[i] = inner ? (positive ? 0 : 1 / 16.0) : (positive ? 15 / 16.0 : 0);
+                upper[i] = inner ? lower[i] + 15 / 16.0 : lower[i] + 1 / 16.0;
             } else {
                 lower[i] = min;
                 upper[i] = max;
