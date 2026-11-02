@@ -27,7 +27,7 @@ final class PartialEdgeQuads {
         for (CopycatBakedQuad quad : normal) {
             List<AABB> faceRegions = regions.get(quad.getDirection());
             AABB bounds = getBounds(quad);
-            if (faceRegions == null || !isFlushRectangle(quad, bounds)) {
+            if (faceRegions == null || !isRectangle(quad, bounds)) {
                 quads.add(quad);
                 continue;
             }
@@ -43,7 +43,7 @@ final class PartialEdgeQuads {
         for (CopycatBakedQuad quad : connected) {
             List<AABB> faceRegions = regions.get(quad.getDirection());
             AABB bounds = getBounds(quad);
-            if (faceRegions == null || !isFlushRectangle(quad, bounds))
+            if (faceRegions == null || !isRectangle(quad, bounds))
                 continue;
             Axis normalAxis = quad.getDirection().getAxis();
             for (int i = 0; i < faceRegions.size(); i++) {
@@ -107,6 +107,9 @@ final class PartialEdgeQuads {
     }
 
     private static boolean overlaps(AABB box, AABB region, Axis normalAxis) {
+        // a region also sets the depth of the quads it takes
+        if (box.min(normalAxis) < region.min(normalAxis) - EPSILON || box.max(normalAxis) > region.max(normalAxis) + EPSILON)
+            return false;
         for (Axis axis : Axis.values()) {
             if (axis != normalAxis && (box.max(axis) <= region.min(axis) + EPSILON || box.min(axis) >= region.max(axis) - EPSILON))
                 return false;
@@ -115,15 +118,12 @@ final class PartialEdgeQuads {
     }
 
     /**
-     * Whether a quad lies flat on the outermost pixel of its face and can be cropped. This leaves out sloped faces,
-     * inner steps, and the slanted side walls of slopes, which crop into the wrong shape.
+     * Whether a quad is a flat rectangle and can be cropped. This leaves out sloped faces and the slanted side walls
+     * of slopes, which crop into the wrong shape.
      */
-    private static boolean isFlushRectangle(CopycatBakedQuad quad, AABB bounds) {
-        Direction face = quad.getDirection();
-        Axis axis = face.getAxis();
-        if (bounds.max(axis) - bounds.min(axis) > EPSILON) return false;
-        double depth = face.getAxisDirection() == Direction.AxisDirection.POSITIVE ? 1 - bounds.max(axis) : bounds.min(axis);
-        return depth < 1 / 16.0 + EPSILON && hasFourCorners(quad, bounds, axis);
+    private static boolean isRectangle(CopycatBakedQuad quad, AABB bounds) {
+        Axis axis = quad.getDirection().getAxis();
+        return bounds.max(axis) - bounds.min(axis) <= EPSILON && hasFourCorners(quad, bounds, axis);
     }
 
     private static boolean hasFourCorners(CopycatBakedQuad quad, AABB bounds, Axis normalAxis) {
