@@ -94,6 +94,32 @@ public class CopycatSlopeModelCore extends CopycatModelCore {
         );
     }
 
+    /**
+     * Draws the surface's edge on the side faces without a mitre, between two points along the slope where a run of
+     * slope layers carries on. The rows come from the middle of the material's top edge, so no side border shows.
+     */
+    public static void assembleRunEdge(CopycatRenderContext context, AssemblyTransform transform, double startZ, double endZ, double startHeight, double endHeight) {
+        final double length = endZ - startZ;
+        final double rise = (endHeight - startHeight) / length;
+        // the edge is cut square to the surface, so it is this much taller than its rows
+        final double stretch = Math.sqrt(1 + rise * rise);
+        context.assemblePiece(
+                transform,
+                vec3(0, 16 - ENHANCED_MARGIN, startZ),
+                aabb(16, ENHANCED_MARGIN, length).move(0, 16 - ENHANCED_MARGIN, 8 - length / 2),
+                cull(UP | DOWN | NORTH | SOUTH),
+                (quad, sprite) -> {
+                    for (MutableVertex vertex : quad.vertices) {
+                        double depth = 1 - vertex.xyz.y;
+                        vertex.xyz.y = (startHeight + (vertex.xyz.z * 16 - startZ) * rise) / 16 - depth * stretch;
+                        vertex.xyz.x += vertex.xyz.x < 0.5 ? -RAMP_EDGE_OFFSET : RAMP_EDGE_OFFSET;
+                    }
+                    quad.disableFinalAutoCull = true;
+                    return true;
+                }
+        );
+    }
+
     private static QuadTransform shearRampEdge(BiConsumer<MutableVertex, Double> place) {
         return (quad, sprite) -> {
             for (MutableVertex vertex : quad.vertices) {
@@ -237,15 +263,23 @@ public class CopycatSlopeModelCore extends CopycatModelCore {
     }
 
     public static void assembleSlope(CopycatRenderContext context, AssemblyTransform transform, double minHeight, double maxHeight, boolean enhanced) {
+        assembleSlope(context, transform, minHeight, maxHeight, enhanced, false, false);
+    }
+
+    /**
+     * @param lowRun  Whether the side walls carry on past the low edge, so their border doesn't turn up into the edge there.
+     * @param highRun The same past the high edge.
+     */
+    public static void assembleSlope(CopycatRenderContext context, AssemblyTransform transform, double minHeight, double maxHeight, boolean enhanced, boolean lowRun, boolean highRun) {
         if (minHeight == 0) {
             if (enhanced) {
-                assembleTriangularSlope(context, transform, maxHeight, ENHANCED_MARGIN);
+                assembleTriangularSlope(context, transform, maxHeight, ENHANCED_MARGIN, highRun);
             } else {
                 assembleTriangularSlope(context, transform, maxHeight);
             }
         } else {
             if (enhanced) {
-                assembleTrapezoidSlope(context, transform, minHeight, maxHeight, ENHANCED_MARGIN);
+                assembleTrapezoidSlope(context, transform, minHeight, maxHeight, ENHANCED_MARGIN, lowRun, highRun);
             } else {
                 assembleTrapezoidSlope(context, transform, minHeight, maxHeight);
             }
@@ -272,7 +306,7 @@ public class CopycatSlopeModelCore extends CopycatModelCore {
         );
     }
 
-    public static void assembleTriangularSlope(CopycatRenderContext context, AssemblyTransform transform, double maxHeight, double margin) {
+    public static void assembleTriangularSlope(CopycatRenderContext context, AssemblyTransform transform, double maxHeight, double margin, boolean highRun) {
         final double angleBottom = Math.atan2(maxHeight, 16);
         final double angleTop = Math.atan2(16, maxHeight);
         final double marginAdjTop = margin / Math.tan(angleTop / 2);
@@ -291,10 +325,12 @@ public class CopycatSlopeModelCore extends CopycatModelCore {
                 cull(UP | NORTH | SOUTH),
                 updateUV(slope(Direction.UP, (a, b) -> map(0, coreZ, 0, coreY, b)))
         );
+        // where the wall carries on past the high edge, the core runs to the end under the edge band
+        final double coreEnd = highRun && maxHeight != 16 ? 16 : 16 - margin;
         context.assemblePiece(
                 transform,
                 vec3(0, 0, coreZ),
-                aabb(16, 16, 16 - margin - coreZ).move(0, 0, coreZ),
+                aabb(16, 16, coreEnd - coreZ).move(0, 0, coreZ),
                 cull(UP | NORTH | SOUTH),
                 updateUV(slope(Direction.UP, (a, b) -> map(coreZ, 16 - margin, coreY, maxHeight - marginAdjTop, b)))
         );
@@ -307,12 +343,12 @@ public class CopycatSlopeModelCore extends CopycatModelCore {
                     updateUV(slope(Direction.UP, (a, b) -> map(16 - margin, 16, maxHeight - marginAdjTop, maxHeight, b)))
             );
         } else {
-            assembleHighWall(context, transform, maxHeight, margin, marginAdjTop);
+            assembleHighWall(context, transform, maxHeight, margin, marginAdjTop, highRun);
         }
         assembleSurface(context, transform, 0, maxHeight, margin, marginAdjBottom, marginAdjTop);
     }
 
-    public static void assembleTrapezoidSlope(CopycatRenderContext context, AssemblyTransform transform, double minHeight, double maxHeight, double margin) {
+    public static void assembleTrapezoidSlope(CopycatRenderContext context, AssemblyTransform transform, double minHeight, double maxHeight, double margin, boolean lowRun, boolean highRun) {
         final double angleBottom = Math.atan2(maxHeight - minHeight, 16) + Math.PI / 2;
         final double marginAdjBottom = margin / Math.tan(angleBottom / 2);
         final double angleTop = Math.atan2(16, maxHeight - minHeight);
@@ -327,17 +363,19 @@ public class CopycatSlopeModelCore extends CopycatModelCore {
                     updateUV(slope(Direction.UP, (a, b) -> map(0, margin, minHeight, minHeight - marginAdjBottom, b)))
             );
         } else {
+            // the core's side faces take over where the wall carries on past the low edge
+            final int sides = lowRun ? EAST | WEST : 0;
             context.assemblePiece(
                     transform,
                     vec3(0, 0, 0),
                     aabb(16, minHeight / 2, margin).move(0, 0, 0),
-                    cull(UP | SOUTH)
+                    cull(UP | SOUTH | sides)
             );
             context.assemblePiece(
                     transform,
                     vec3(0, 0, 0),
                     aabb(16, minHeight / 2, margin).move(0, 16 - minHeight / 2, 0),
-                    cull(UP | DOWN | SOUTH),
+                    cull(UP | DOWN | SOUTH | sides),
                     scale(
                             pivot(0, 0, 0),
                             scale(1, 32 / minHeight, 1)
@@ -350,10 +388,13 @@ public class CopycatSlopeModelCore extends CopycatModelCore {
                     translate(0, minHeight / 2, 0)
             );
         }
+        // where the wall carries on past an edge, the core runs to the end under the edge band
+        final double coreStart = lowRun && minHeight != 16 ? 0 : margin;
+        final double coreEnd = highRun && maxHeight != 16 ? 16 : 16 - margin;
         context.assemblePiece(
                 transform,
-                vec3(0, 0, margin),
-                aabb(16, 16, 16 - margin * 2).move(0, 0, margin),
+                vec3(0, 0, coreStart),
+                aabb(16, 16, coreEnd - coreStart).move(0, 0, coreStart),
                 cull(UP | NORTH | SOUTH),
                 updateUV(slope(Direction.UP, (a, b) -> map(margin, 16 - margin, minHeight - marginAdjBottom, maxHeight - marginAdjTop, b)))
         );
@@ -366,7 +407,7 @@ public class CopycatSlopeModelCore extends CopycatModelCore {
                     updateUV(slope(Direction.UP, (a, b) -> map(16 - margin, 16, maxHeight - marginAdjTop, maxHeight, b)))
             );
         } else {
-            assembleHighWall(context, transform, maxHeight, margin, marginAdjTop);
+            assembleHighWall(context, transform, maxHeight, margin, marginAdjTop, highRun);
         }
         assembleSurface(context, transform, minHeight, maxHeight, margin, marginAdjBottom, marginAdjTop);
     }
@@ -375,20 +416,22 @@ public class CopycatSlopeModelCore extends CopycatModelCore {
      * Assembles the wall at the high edge from the bottom and top rows of the material, so that both borders show.
      * The cut under the surface can reach below the middle of the wall, so the split stays under it on a whole pixel.
      */
-    private static void assembleHighWall(CopycatRenderContext context, AssemblyTransform transform, double maxHeight, double margin, double marginAdjTop) {
+    private static void assembleHighWall(CopycatRenderContext context, AssemblyTransform transform, double maxHeight, double margin, double marginAdjTop, boolean run) {
         final double split = Math.min(maxHeight / 2, Math.floor(maxHeight - marginAdjTop));
         final double topRows = maxHeight - split;
+        // the core's side faces take over where the wall carries on past the high edge
+        final int sides = run ? EAST | WEST : 0;
         context.assemblePiece(
                 transform,
                 vec3(0, 0, 16 - margin),
                 aabb(16, split, margin).move(0, 0, 16 - margin),
-                cull(UP | NORTH)
+                cull(UP | NORTH | sides)
         );
         context.assemblePiece(
                 transform,
                 vec3(0, 16 - topRows, 16 - margin),
                 aabb(16, topRows, margin).move(0, 16 - topRows, 16 - margin),
-                cull(UP | DOWN | NORTH),
+                cull(UP | DOWN | NORTH | sides),
                 scale(
                         pivot(16, 16, 16),
                         scale(1, 16 / topRows, 1)

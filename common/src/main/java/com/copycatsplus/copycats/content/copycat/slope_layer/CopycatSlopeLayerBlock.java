@@ -71,6 +71,9 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
     public static final EnumProperty<StairsShape> SHAPE = BlockStateProperties.STAIRS_SHAPE;
 
     private static final String VERTICAL_ITEM_TAG = "VerticalSlopeLayer";
+    // model variants: the run carries on past the low or high edge
+    public static final int RUN_LOW = 1;
+    public static final int RUN_HIGH = 2;
 
     // the shallow and steep runs from their low end up, each piece starts where the last one ends
     private static final List<List<RunPiece>> RUNS = List.of(
@@ -78,7 +81,7 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
             List.of(new RunPiece(3, 0, 0), new RunPiece(11, 1, 0), new RunPiece(12, 1, 1), new RunPiece(13, 2, 1), new RunPiece(14, 2, 2), new RunPiece(5, 3, 2))
     );
     // the rise of the steep run per pixel along it
-    private static final double STEEP_GRADIENT = 0.75;
+    public static final double STEEP_GRADIENT = 0.75;
 
     private static final int placementHelperId = PlacementHelpers.register(new PlacementHelper());
 
@@ -334,6 +337,40 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
                 && connectingPos.subtract(pos).get(getRise(state).getAxis()) == 0)
             return Optional.of(false);
         return Optional.empty();
+    }
+
+    @Override
+    public boolean isCTContinued(BlockAndTintGetter reader, BlockState state, BlockPos pos, BlockPos otherPos, Direction face) {
+        // the side walls of a run meet at the same height where the surface carries on at the same level
+        if (face.getAxis() == getBase(state).getAxis() || face.getAxis() == getRise(state).getAxis() || isCorner(state)) return false;
+        BlockPos offset = otherPos.subtract(pos);
+        Direction side = Direction.fromDelta(offset.getX(), offset.getY(), offset.getZ());
+        return side != null && side.getAxis() == getRise(state).getAxis() && otherPos.equals(getRunPos(reader, state, pos, side));
+    }
+
+    @Override
+    public int getModelVariant(BlockAndTintGetter reader, BlockState state, BlockPos pos) {
+        int layers = state.getValue(LAYERS);
+        if (getKink(layers) != 0) {
+            // the upper piece of a steep pair, resting on the lower one
+            if (getLowEdge(layers) != 0) return 0;
+            BlockPos lowerPos = pos.relative(getBase(state));
+            BlockState lower = reader.getBlockState(lowerPos);
+            return lower.is(this) && lower.getValue(LAYERS) == layers - 1 && copyOrientation(lower, state) == lower
+                    && ICopycatBlock.getMaterial(reader, lowerPos) == ICopycatBlock.getMaterial(reader, pos) ? RUN_LOW : 0;
+        }
+        if (isCorner(state) || layers == 8) return 0;
+        int variant = 0;
+        if (getRunPos(reader, state, pos, getRise(state).getOpposite()) != null) variant |= RUN_LOW;
+        if (getRunPos(reader, state, pos, getRise(state)) != null) variant |= RUN_HIGH;
+        return variant;
+    }
+
+    // the piece of the same material whose surface carries on past this side
+    @Nullable
+    private BlockPos getRunPos(BlockAndTintGetter reader, BlockState state, BlockPos pos, Direction side) {
+        BlockPos surfacePos = getCTSurfacePos(reader, state, pos, pos.relative(side), getBase(state).getOpposite());
+        return surfacePos != null && ICopycatBlock.getMaterial(reader, surfacePos) == ICopycatBlock.getMaterial(reader, pos) ? surfacePos : null;
     }
 
     @Nullable
