@@ -553,6 +553,9 @@ public interface ICopycatBlock extends IWrenchable, IStateType, TransformableBlo
         BlockState toState = reader.getBlockState(toPos);
 
         if (facing != null) {
+            if (textureFace != null && !CopycatExternalContext.shouldConnectPartialEdges()
+                    && BlockFaceUtils.isNotchedEdge(reader, fromState, fromPos, facing, textureFace))
+                return false;
             return BlockFaceUtils.faceMatch(reader, fromState, fromPos, toState, toPos, facing)
                     || textureFace != null && BlockFaceUtils.edgeMatch(reader, fromState, fromPos, toState, toPos, facing, textureFace);
         } else if (diff.getX() != 0 && diff.getY() != 0 && diff.getZ() != 0) {

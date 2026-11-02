@@ -1,5 +1,6 @@
 package com.copycatsplus.copycats.utility;
 
+import com.copycatsplus.copycats.content.copycat.vertical_stairs.CopycatVerticalStairBlock;
 import com.copycatsplus.copycats.foundation.copycat.CopycatExternalContext;
 import com.copycatsplus.copycats.foundation.copycat.ICopycatBlock;
 import com.copycatsplus.copycats.foundation.copycat.model.ScaledBlockAndTintGetter;
@@ -39,6 +40,10 @@ public class BlockFaceUtils {
             Shapes.box(0, 0, 0, 1 / 16.0, 1, 1),
             Shapes.box(15 / 16.0, 0, 0, 1, 1, 1)
     };
+
+    // the width of a casing's border in the stair models
+    private static final double BORDER = 2 / 16.0;
+    private static final double EDGE_EPSILON = 1e-5;
 
     public static record ShapeKey(VoxelShape fromShape, VoxelShape toShape) {
     }
@@ -229,15 +234,34 @@ public class BlockFaceUtils {
                 if (face.getAxis() == side.getAxis()) continue;
                 VoxelShape edge = getEdge(level, state, pos, side, face);
                 VoxelShape neighbourEdge = getEdge(level, neighbour, neighbourPos, side.getOpposite(), face);
-                if (!Shapes.joinIsNotEmpty(edge, neighbourEdge, BooleanOp.NOT_SAME)) continue;
+                boolean notched = isNotchedEdge(level, state, pos, side, face);
+                if (!notched && !Shapes.joinIsNotEmpty(edge, neighbourEdge, BooleanOp.NOT_SAME)) continue;
                 VoxelShape overlap = Shapes.join(edge, neighbourEdge, BooleanOp.AND);
                 if (overlap.isEmpty()) continue;
                 Axis along = remainingAxis(side.getAxis(), face.getAxis());
+                // Where the edge carries on past the neighbour, the border stays long enough to meet the neighbour's border
+                double min = overlap.min(along) > edge.min(along) + EDGE_EPSILON ? overlap.min(along) + BORDER : overlap.min(along);
+                double max = overlap.max(along) < edge.max(along) - EDGE_EPSILON ? overlap.max(along) - BORDER : overlap.max(along);
+                if (max - min < EDGE_EPSILON) continue;
                 regions.computeIfAbsent(face, f -> new ArrayList<>())
-                        .add(getSeamRegion(side, face, along, overlap.min(along), overlap.max(along)));
+                        .add(getSeamRegion(side, face, along, min, max, notched ? 0.5 - BORDER : 0.5));
             }
         }
         return regions;
+    }
+
+    /**
+     * Whether a side of a stair's L shaped face is shorter than the face. The inner edges of the L are cut from the same
+     * border of the texture as that side, so it can only connect through {@link #getPartialEdgeRegions}, which leaves
+     * those inner edges alone.
+     */
+    public static boolean isNotchedEdge(BlockGetter level, BlockState state, BlockPos pos, Direction side, Direction textureFace) {
+        if (textureFace.getAxis() == side.getAxis() || !CopycatVerticalStairBlock.isStairs(state)) return false;
+        VoxelShape edge = getEdge(level, state, pos, side, textureFace);
+        if (edge.isEmpty()) return false;
+        Axis along = remainingAxis(side.getAxis(), textureFace.getAxis());
+        VoxelShape faceShape = state.getFaceOcclusionShape(level, pos, textureFace);
+        return edge.min(along) > faceShape.min(along) + EDGE_EPSILON || edge.max(along) < faceShape.max(along) - EDGE_EPSILON;
     }
 
     private static boolean canCompareEdges(BlockState fromState, BlockState toState) {
@@ -256,14 +280,14 @@ public class BlockFaceUtils {
         throw new IllegalArgumentException("Axes must differ");
     }
 
-    private static AABB getSeamRegion(Direction side, Direction face, Axis along, double min, double max) {
+    private static AABB getSeamRegion(Direction side, Direction face, Axis along, double min, double max, double depth) {
         double[] lower = new double[3];
         double[] upper = new double[3];
         for (Axis axis : Axis.values()) {
             int i = axis.ordinal();
             if (axis == side.getAxis()) {
-                lower[i] = side.getAxisDirection() == Direction.AxisDirection.POSITIVE ? 0.5 : 0;
-                upper[i] = lower[i] + 0.5;
+                lower[i] = side.getAxisDirection() == Direction.AxisDirection.POSITIVE ? 1 - depth : 0;
+                upper[i] = lower[i] + depth;
             } else if (axis == face.getAxis()) {
                 lower[i] = face.getAxisDirection() == Direction.AxisDirection.POSITIVE ? 15 / 16.0 : 0;
                 upper[i] = lower[i] + 1 / 16.0;
