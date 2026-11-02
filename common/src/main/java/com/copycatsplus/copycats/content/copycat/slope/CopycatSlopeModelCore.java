@@ -210,7 +210,14 @@ public class CopycatSlopeModelCore extends CopycatModelCore {
                     vec3(0, 0, kink),
                     aabb(16, 16, 16 - kink).move(0, 0, kink),
                     cull(NORTH),
-                    updateUV(slope(Direction.UP, (a, b) -> map(kink, 16, 0, maxHeight, b)))
+                    updateUV(slope(Direction.UP, (a, b) -> map(kink, 16, 0, maxHeight, b))),
+                    // the slope keeps a sliver of height at the kink, a crack against the top of the piece below
+                    (quad, sprite) -> {
+                        for (MutableVertex vertex : quad.vertices) {
+                            if (vertex.xyz.y < 0.1 / 16) vertex.xyz.y = 0;
+                        }
+                        return true;
+                    }
             );
             return;
         }
