@@ -118,7 +118,7 @@ public abstract class CopycatBlockMixin extends Block implements ICopycatBlock {
     @Override
     public boolean addLandingEffects(BlockState state1, ServerLevel level, BlockPos pos, BlockState state2,
                                      LivingEntity entity, int numberOfParticles) {
-        return getMaterial(level, pos).addLandingEffects(level, pos, state2, entity, numberOfParticles);
+        return ICopycatBlock.spawnLandingParticles(getMaterial(level, pos), level, pos, entity, numberOfParticles);
     }
 
     @Override

@@ -133,7 +133,7 @@ public abstract class MultiStateCopycatBlockMixin extends Block implements IBloc
             if (copycatBE == null)
                 return super.addLandingEffects(state1, level, pos, state2, entity, numberOfParticles);
             BlockState material = copycatBE.getMaterialItemStorage().getMaterialItem(property).material();
-            return material.addLandingEffects(level, pos, material, entity, numberOfParticles);
+            return ICopycatBlock.spawnLandingParticles(material, level, pos, entity, numberOfParticles);
         } else {
             return super.addLandingEffects(state1, level, pos, state2, entity, numberOfParticles);
         }

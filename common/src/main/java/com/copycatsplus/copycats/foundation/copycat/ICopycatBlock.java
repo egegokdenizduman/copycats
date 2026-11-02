@@ -24,6 +24,9 @@ import net.minecraft.client.color.block.BlockColor;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Vec3i;
+import net.minecraft.core.particles.BlockParticleOption;
+import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
@@ -345,6 +348,16 @@ public interface ICopycatBlock extends IWrenchable, IStateType, TransformableBlo
         if (reader.getBlockEntity(targetPos) instanceof ICopycatBlockEntity cbe)
             return cbe.getMaterial();
         return Blocks.AIR.defaultBlockState();
+    }
+
+    /**
+     * The particle packet carries no position, so the client can't read the material from the model data
+     * and would show the particle texture of the empty copycat model. Send the material instead.
+     */
+    static boolean spawnLandingParticles(BlockState material, ServerLevel level, BlockPos pos, LivingEntity entity, int numberOfParticles) {
+        if (!material.addLandingEffects(level, pos, material, entity, numberOfParticles))
+            level.sendParticles(new BlockParticleOption(ParticleTypes.BLOCK, material), entity.getX(), entity.getY(), entity.getZ(), numberOfParticles, 0, 0, 0, 0.15);
+        return true;
     }
 
     /**
