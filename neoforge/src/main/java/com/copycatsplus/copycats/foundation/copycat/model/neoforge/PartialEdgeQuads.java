@@ -27,7 +27,7 @@ final class PartialEdgeQuads {
         for (CopycatBakedQuad quad : normal) {
             List<AABB> faceRegions = regions.get(quad.getDirection());
             AABB bounds = getBounds(quad);
-            if (faceRegions == null || !isFlush(bounds, quad.getDirection())) {
+            if (faceRegions == null || !isFlushRectangle(quad, bounds)) {
                 quads.add(quad);
                 continue;
             }
@@ -43,7 +43,7 @@ final class PartialEdgeQuads {
         for (CopycatBakedQuad quad : connected) {
             List<AABB> faceRegions = regions.get(quad.getDirection());
             AABB bounds = getBounds(quad);
-            if (faceRegions == null || !isFlush(bounds, quad.getDirection()))
+            if (faceRegions == null || !isFlushRectangle(quad, bounds))
                 continue;
             Axis normalAxis = quad.getDirection().getAxis();
             for (int i = 0; i < faceRegions.size(); i++) {
@@ -115,13 +115,31 @@ final class PartialEdgeQuads {
     }
 
     /**
-     * Whether a quad lies flat on the outermost pixel of its face. This leaves out sloped faces and inner steps.
+     * Whether a quad lies flat on the outermost pixel of its face and can be cropped. This leaves out sloped faces,
+     * inner steps, and the slanted side walls of slopes, which crop into the wrong shape.
      */
-    private static boolean isFlush(AABB bounds, Direction face) {
+    private static boolean isFlushRectangle(CopycatBakedQuad quad, AABB bounds) {
+        Direction face = quad.getDirection();
         Axis axis = face.getAxis();
         if (bounds.max(axis) - bounds.min(axis) > EPSILON) return false;
         double depth = face.getAxisDirection() == Direction.AxisDirection.POSITIVE ? 1 - bounds.max(axis) : bounds.min(axis);
-        return depth < 1 / 16.0 + EPSILON;
+        return depth < 1 / 16.0 + EPSILON && hasFourCorners(quad, bounds, axis);
+    }
+
+    private static boolean hasFourCorners(CopycatBakedQuad quad, AABB bounds, Axis normalAxis) {
+        Axis first = normalAxis == Axis.X ? Axis.Y : Axis.X;
+        Axis second = normalAxis == Axis.Z ? Axis.Y : Axis.Z;
+        int corners = 0;
+        for (int i = 0; i < 4; i++) {
+            Vec3 xyz = BakedQuadHelper.getXYZ(quad.getVertices(), i);
+            double a = xyz.get(first), b = xyz.get(second);
+            boolean atFirstMin = Math.abs(a - bounds.min(first)) < EPSILON;
+            boolean atSecondMin = Math.abs(b - bounds.min(second)) < EPSILON;
+            if (!atFirstMin && Math.abs(a - bounds.max(first)) >= EPSILON) return false;
+            if (!atSecondMin && Math.abs(b - bounds.max(second)) >= EPSILON) return false;
+            corners |= 1 << ((atFirstMin ? 0 : 1) + (atSecondMin ? 0 : 2));
+        }
+        return corners == 0b1111;
     }
 
     private static AABB getBounds(CopycatBakedQuad quad) {
