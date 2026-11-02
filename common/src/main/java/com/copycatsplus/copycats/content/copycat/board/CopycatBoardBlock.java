@@ -165,21 +165,6 @@ public class CopycatBoardBlock extends WaterloggedMultiStateCopycatBlock impleme
         return CopycatSpecialCases.isBarsMaterial(material);
     }
 
-    @Nullable
-    @Override
-    public BlockState getAcceptedBlockState(Level level, BlockPos pos, ItemStack item, Direction face) {
-        BlockState material = super.getAcceptedBlockState(level, pos, item, face);
-        // only catwalks take bars, boards that already have them keep them
-        if (material != null && CopycatSpecialCases.isBarsMaterial(material) && !isCatwalk(level.getBlockState(pos)))
-            return null;
-        return material;
-    }
-
-    private boolean isCatwalk(BlockState state) {
-        return state.is(this) && state.getValue(DOWN)
-                && (state.getValue(NORTH) && state.getValue(SOUTH) || state.getValue(EAST) && state.getValue(WEST));
-    }
-
     @Override
     public boolean isIgnoredConnectivitySide(BlockAndTintGetter reader, BlockState state, Direction face, BlockPos fromPos, @Nullable BlockPos toPos, @Nullable BlockState toState) {
         if (toPos == null)
