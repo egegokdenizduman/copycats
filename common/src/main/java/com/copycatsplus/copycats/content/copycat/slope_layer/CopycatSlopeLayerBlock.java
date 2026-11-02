@@ -332,9 +332,10 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
 
     @Override
     public Optional<Boolean> isCTBlocked(BlockAndTintGetter reader, BlockState state, BlockPos pos, BlockPos connectingPos, BlockPos blockingPos, Direction face) {
-        // a run piece resting on the flat part of a side neighbour leaves the sloped part of its surface free
+        // a run piece resting on the flat part of a sloped neighbour leaves the sloped part of its surface free
+        BlockState connecting = reader.getBlockState(connectingPos);
         if (face == getBase(state).getOpposite() && state.getValue(LAYERS) != 8 && reader.getBlockState(blockingPos).is(this)
-                && connectingPos.subtract(pos).get(getRise(state).getAxis()) == 0)
+                && connecting.is(this) && connecting.getValue(LAYERS) != 8)
             return Optional.of(false);
         return Optional.empty();
     }
