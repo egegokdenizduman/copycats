@@ -6,6 +6,7 @@ import com.copycatsplus.copycats.Copycats;
 import com.copycatsplus.copycats.content.copycat.slope.CopycatSlopeBlock;
 import com.copycatsplus.copycats.foundation.copycat.CCWaterloggedCopycatBlock;
 import com.copycatsplus.copycats.foundation.copycat.ICopycatBlock;
+import com.copycatsplus.copycats.foundation.copycat.ICustomCTBlocking;
 import com.copycatsplus.copycats.foundation.copycat.IStateType;
 import com.copycatsplus.copycats.utility.BlockUtils;
 import com.copycatsplus.copycats.utility.InteractionUtils;
@@ -30,6 +31,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.item.context.UseOnContext;
+import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
@@ -45,6 +47,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.List;
@@ -54,7 +57,7 @@ import static net.minecraft.core.Direction.UP;
 
 @ParametersAreNonnullByDefault
 @MethodsReturnNonnullByDefault
-public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements SpecialBlockItemRequirement, IStateType {
+public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements SpecialBlockItemRequirement, IStateType, ICustomCTBlocking {
 
 
     public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
@@ -321,6 +324,44 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
     private static Direction getRise(BlockState state) {
         if (!state.getValue(IN_WALL) || isVertical(state)) return state.getValue(FACING);
         return state.getValue(HALF) == Half.TOP ? Direction.UP : Direction.DOWN;
+    }
+
+    @Nullable
+    @Override
+    public BlockPos getCTSurfacePos(BlockAndTintGetter reader, BlockState state, BlockPos pos, BlockPos otherPos, Direction face) {
+        if (face != getBase(state).getOpposite()) return null;
+        BlockState other = reader.getBlockState(otherPos);
+        if (!other.is(this) || getBase(other) != face.getOpposite()) return null;
+        // the stepped shape stands above the surface at a low edge, so the touching faces can't tell if the surfaces meet
+        BlockPos offset = otherPos.subtract(pos);
+        Direction side = null;
+        Direction diagonal = null;
+        for (Direction direction : Direction.values()) {
+            if (offset.get(direction.getAxis()) != direction.getAxisDirection().getStep()) continue;
+            if (side == null) side = direction;
+            else diagonal = direction;
+        }
+        if (side == null) return null;
+        if (diagonal != null)
+            return getCornerHeight(state, side, diagonal) == getCornerHeight(other, side.getOpposite(), diagonal.getOpposite()) ? otherPos : null;
+        Direction along = side.getClockWise(face.getAxis());
+        return getCornerHeight(state, side, along) == getCornerHeight(other, side.getOpposite(), along)
+                && getCornerHeight(state, side, along.getOpposite()) == getCornerHeight(other, side.getOpposite(), along.getOpposite()) ? otherPos : null;
+    }
+
+    // surface height in quarters of a block at the corner between two sides
+    private static int getCornerHeight(BlockState state, Direction first, Direction second) {
+        int low = getLowEdge(state.getValue(LAYERS));
+        int high = getHighEdge(state.getValue(LAYERS));
+        Direction rise = getRise(state);
+        boolean riseEnd = first == rise || second == rise;
+        if (!isCorner(state)) return riseEnd ? high : low;
+        StairsShape shape = state.getValue(SHAPE);
+        boolean left = shape == StairsShape.INNER_LEFT || shape == StairsShape.OUTER_LEFT;
+        Direction arm = left ? rise.getCounterClockWise() : rise.getClockWise();
+        boolean armEnd = first == arm || second == arm;
+        boolean inner = shape == StairsShape.INNER_LEFT || shape == StairsShape.INNER_RIGHT;
+        return (inner ? riseEnd || armEnd : riseEnd && armEnd) ? high : low;
     }
 
     private static BlockState copyOrientation(BlockState state, BlockState source) {
