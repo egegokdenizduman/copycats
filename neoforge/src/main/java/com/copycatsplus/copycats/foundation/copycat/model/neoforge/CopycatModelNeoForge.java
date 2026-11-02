@@ -91,19 +91,23 @@ public class CopycatModelNeoForge extends BakedModelWrapperWithData {
 
     @Override
     public @NotNull ChunkRenderTypeSet getRenderTypes(@NotNull BlockState state, @NotNull RandomSource rand, @NotNull ModelData data) {
-        ChunkRenderTypeSet renderTypes = allRenderTypes;
         Map<String, BlockState> materials = getMaterials(data);
+        // getQuads draws the base without a material, and model data may not be there yet
+        if (materials.isEmpty())
+            return allRenderTypes;
+        ChunkRenderTypeSet renderTypes = ChunkRenderTypeSet.none();
+        Map<String, ModelData> wrappedDataMap = getWrappedData(data);
         prepareModelCore(state, rand, data);
         for (CopycatModelCore.ModelEntry entry : entries) {
-            BlockState material = materials.get(entry.key());
+            BlockState material = entry.materialMapper().map(state, materials.get(entry.key()));
             if (material == null && entry.type().useCopycatLogic())
                 continue;
             BakedModel model = getModelForEntry(entry, state, material);
             if (model == null)
                 continue;
             if (entry.type().useCopycatLogic()) {
-                if (material != null)
-                    renderTypes = ChunkRenderTypeSet.union(renderTypes, model.getRenderTypes(material, rand, data));
+                ModelData wrappedData = wrappedDataMap.getOrDefault(entry.key(), ModelData.EMPTY);
+                renderTypes = ChunkRenderTypeSet.union(renderTypes, model.getRenderTypes(material, rand, wrappedData));
             } else {
                 renderTypes = ChunkRenderTypeSet.union(renderTypes, model.getRenderTypes(state, rand, data));
             }
