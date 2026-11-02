@@ -51,6 +51,7 @@ import org.jetbrains.annotations.Nullable;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Predicate;
 
 import static net.minecraft.core.Direction.UP;
@@ -326,12 +327,19 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
         return state.getValue(HALF) == Half.TOP ? Direction.UP : Direction.DOWN;
     }
 
+    @Override
+    public Optional<Boolean> isCTBlocked(BlockAndTintGetter reader, BlockState state, BlockPos pos, BlockPos connectingPos, BlockPos blockingPos, Direction face) {
+        // a run piece resting on the flat part of a side neighbour leaves the sloped part of its surface free
+        if (face == getBase(state).getOpposite() && state.getValue(LAYERS) != 8 && reader.getBlockState(blockingPos).is(this)
+                && connectingPos.subtract(pos).get(getRise(state).getAxis()) == 0)
+            return Optional.of(false);
+        return Optional.empty();
+    }
+
     @Nullable
     @Override
     public BlockPos getCTSurfacePos(BlockAndTintGetter reader, BlockState state, BlockPos pos, BlockPos otherPos, Direction face) {
         if (face != getBase(state).getOpposite()) return null;
-        BlockState other = reader.getBlockState(otherPos);
-        if (!other.is(this) || getBase(other) != face.getOpposite()) return null;
         // the stepped shape stands above the surface at a low edge, so the touching faces can't tell if the surfaces meet
         BlockPos offset = otherPos.subtract(pos);
         Direction side = null;
@@ -342,11 +350,22 @@ public class CopycatSlopeLayerBlock extends CCWaterloggedCopycatBlock implements
             else diagonal = direction;
         }
         if (side == null) return null;
+        // a run carries on a level up past a high edge at the block top, and a level down past a low edge at the floor
+        for (int step : new int[]{0, 1, -1}) {
+            BlockPos surfacePos = otherPos.relative(face, step);
+            BlockState other = reader.getBlockState(surfacePos);
+            if (other.is(this) && getBase(other) == face.getOpposite() && surfacesMeet(state, other, side, diagonal, face, step * 4))
+                return surfacePos;
+        }
+        return null;
+    }
+
+    private static boolean surfacesMeet(BlockState state, BlockState other, Direction side, @Nullable Direction diagonal, Direction face, int levelOffset) {
         if (diagonal != null)
-            return getCornerHeight(state, side, diagonal) == getCornerHeight(other, side.getOpposite(), diagonal.getOpposite()) ? otherPos : null;
+            return getCornerHeight(state, side, diagonal) == getCornerHeight(other, side.getOpposite(), diagonal.getOpposite()) + levelOffset;
         Direction along = side.getClockWise(face.getAxis());
-        return getCornerHeight(state, side, along) == getCornerHeight(other, side.getOpposite(), along)
-                && getCornerHeight(state, side, along.getOpposite()) == getCornerHeight(other, side.getOpposite(), along.getOpposite()) ? otherPos : null;
+        return getCornerHeight(state, side, along) == getCornerHeight(other, side.getOpposite(), along) + levelOffset
+                && getCornerHeight(state, side, along.getOpposite()) == getCornerHeight(other, side.getOpposite(), along.getOpposite()) + levelOffset;
     }
 
     // surface height in quarters of a block at the corner between two sides
