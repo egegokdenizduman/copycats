@@ -18,6 +18,7 @@ import java.util.Map;
  */
 final class PartialEdgeQuads {
     private static final double EPSILON = 1e-5;
+    private static final double PIXEL = 1 / 16.0;
 
     private PartialEdgeQuads() {
     }
@@ -28,7 +29,8 @@ final class PartialEdgeQuads {
             List<AABB> faceRegions = regions.get(quad.getDirection());
             AABB bounds = getBounds(quad);
             if (faceRegions == null || !isRectangle(quad, bounds)) {
-                quads.add(quad);
+                if (faceRegions == null || !isInsideRegion(quad, bounds, faceRegions))
+                    quads.add(quad);
                 continue;
             }
             List<AABB> pieces = subtract(List.of(bounds), faceRegions, quad.getDirection().getAxis());
@@ -43,8 +45,13 @@ final class PartialEdgeQuads {
         for (CopycatBakedQuad quad : connected) {
             List<AABB> faceRegions = regions.get(quad.getDirection());
             AABB bounds = getBounds(quad);
-            if (faceRegions == null || !isRectangle(quad, bounds))
+            if (faceRegions == null)
                 continue;
+            if (!isRectangle(quad, bounds)) {
+                if (isInsideRegion(quad, bounds, faceRegions))
+                    quads.add(quad);
+                continue;
+            }
             Axis normalAxis = quad.getDirection().getAxis();
             for (int i = 0; i < faceRegions.size(); i++) {
                 AABB region = faceRegions.get(i);
@@ -124,6 +131,24 @@ final class PartialEdgeQuads {
     private static boolean isRectangle(CopycatBakedQuad quad, AABB bounds) {
         Axis axis = quad.getDirection().getAxis();
         return bounds.max(axis) - bounds.min(axis) <= EPSILON && hasFourCorners(quad, bounds, axis);
+    }
+
+    /**
+     * Whether a flat quad that can't be cropped lies inside a region, so it can be swapped whole. The sloped top of a
+     * side wall stands a little past the stepped edge that the region comes from, so it may reach out by a pixel.
+     */
+    private static boolean isInsideRegion(CopycatBakedQuad quad, AABB bounds, List<AABB> regions) {
+        Axis normalAxis = quad.getDirection().getAxis();
+        if (bounds.max(normalAxis) - bounds.min(normalAxis) > EPSILON) return false;
+        for (AABB region : regions) {
+            boolean inside = true;
+            for (Axis axis : Axis.values()) {
+                double slack = axis == normalAxis ? EPSILON : PIXEL;
+                if (bounds.min(axis) < region.min(axis) - slack || bounds.max(axis) > region.max(axis) + slack) inside = false;
+            }
+            if (inside) return true;
+        }
+        return false;
     }
 
     private static boolean hasFourCorners(CopycatBakedQuad quad, AABB bounds, Axis normalAxis) {
