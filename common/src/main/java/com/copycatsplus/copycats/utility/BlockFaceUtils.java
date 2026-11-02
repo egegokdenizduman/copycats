@@ -260,7 +260,8 @@ public class BlockFaceUtils {
         VoxelShape edge = getEdge(level, state, pos, side, textureFace);
         if (edge.isEmpty()) return false;
         Axis along = remainingAxis(side.getAxis(), textureFace.getAxis());
-        VoxelShape faceShape = state.getFaceOcclusionShape(level, pos, textureFace);
+        // a face's slice shape reports the bounds of the whole block, so measure the joined shape
+        VoxelShape faceShape = Shapes.join(state.getFaceOcclusionShape(level, pos, textureFace), Shapes.block(), BooleanOp.AND);
         return edge.min(along) > faceShape.min(along) + EDGE_EPSILON || edge.max(along) < faceShape.max(along) - EDGE_EPSILON;
     }
 
