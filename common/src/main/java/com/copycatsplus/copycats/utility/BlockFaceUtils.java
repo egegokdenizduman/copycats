@@ -45,6 +45,7 @@ public class BlockFaceUtils {
     // the width of a casing's border in the stair models
     private static final double BORDER = 2 / 16.0;
     private static final double EDGE_EPSILON = 1e-5;
+    private static final double STEP_EPSILON = 1 / 16.0 - EDGE_EPSILON;
 
     public static record ShapeKey(VoxelShape fromShape, VoxelShape toShape) {
     }
@@ -278,9 +279,10 @@ public class BlockFaceUtils {
                 VoxelShape overlap = Shapes.join(edge, neighbourEdge, BooleanOp.AND);
                 if (overlap.isEmpty()) continue;
                 Axis along = remainingAxis(side.getAxis(), face.getAxis());
-                // Where the edge carries on past the neighbour, the border stays long enough to meet the neighbour's border
-                double min = overlap.min(along) > edge.min(along) + EDGE_EPSILON ? overlap.min(along) + BORDER : overlap.min(along);
-                double max = overlap.max(along) < edge.max(along) - EDGE_EPSILON ? overlap.max(along) - BORDER : overlap.max(along);
+                // Where the edge carries on past the neighbour, the border stays long enough to meet the neighbour's border.
+                // Less than a pixel is the top step of a sloped shape, which stands above the surface.
+                double min = overlap.min(along) > edge.min(along) + STEP_EPSILON ? overlap.min(along) + BORDER : overlap.min(along);
+                double max = overlap.max(along) < edge.max(along) - STEP_EPSILON ? overlap.max(along) - BORDER : overlap.max(along);
                 // Borders of the L's step are cut from the sides along the edge, so they keep the normal texture where
                 // those sides only connect in the second result
                 boolean lowStays = notched && connectsNotched(level, state, pos, material, Direction.fromAxisAndDirection(along, Direction.AxisDirection.NEGATIVE), face);
